@@ -885,7 +885,7 @@ export default function App() {
                                                     ))}
                                                 </select>
                                             </th>
-                                            <th className="actions" />
+                                            <th className="actions"></th>
                                         </tr>
                                     )}
                                     </thead>
