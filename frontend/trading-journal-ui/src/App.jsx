@@ -332,10 +332,6 @@ export default function App() {
             setError("Created time is required.");
             return;
         }
-        if ((stopLossNumber === null) !== (takeProfitNumber === null)) {
-            setError("Provide both Stop Loss and Take Profit, or leave both empty.");
-            return;
-        }
         if (stopLossNumber !== null && takeProfitNumber !== null) {
             const derived = computeDerived(editSymbol, editDirection, entryPriceNumber, stopLossNumber, takeProfitNumber);
             if (!derived) {
@@ -406,10 +402,6 @@ export default function App() {
         const takeProfitNumber = takeProfitPrice === "" ? null : Number(takeProfitPrice);
         if (!Number.isFinite(entryPriceNumber) || entryPriceNumber <= 0) {
             setError("Entry must be a positive number.");
-            return;
-        }
-        if ((stopLossNumber === null) !== (takeProfitNumber === null)) {
-            setError("Provide both Stop Loss and Take Profit, or leave both empty.");
             return;
         }
         if (stopLossNumber !== null && takeProfitNumber !== null) {
@@ -708,24 +700,24 @@ export default function App() {
                                 </div>
                             </form>
 
-                            {(() => {
-                                if (stopLossPrice === "" && takeProfitPrice === "") {
+                                {(() => {
+                                    if (stopLossPrice === "" || takeProfitPrice === "") {
+                                        return (
+                                            <div className="helper-text">
+                                                SL/TP optional. Enter both to see pips and RR.
+                                            </div>
+                                        );
+                                    }
+                                    const derived = computeDerived(symbol, direction, entryPrice, stopLossPrice, takeProfitPrice);
                                     return (
                                         <div className="helper-text">
-                                            SL/TP optional. Enter both to see pips and RR.
+                                            {derived
+                                                ? `SL pips: ${derived.slPips} | TP pips: ${derived.tpPips} | RR: ${derived.rrRatio}`
+                                                : "Entry, Stop Loss, and Take Profit must be valid and ordered correctly."}
                                         </div>
                                     );
-                                }
-                                const derived = computeDerived(symbol, direction, entryPrice, stopLossPrice, takeProfitPrice);
-                                return (
-                                    <div className="helper-text">
-                                        {derived
-                                            ? `SL pips: ${derived.slPips} | TP pips: ${derived.tpPips} | RR: ${derived.rrRatio}`
-                                            : "Entry, Stop Loss, and Take Profit must be valid and ordered correctly."}
-                                    </div>
-                                );
-                            })()}
-                        </div>
+                                })()}
+                            </div>
 
                         <div className="card">
                                 <div className="card-header">
