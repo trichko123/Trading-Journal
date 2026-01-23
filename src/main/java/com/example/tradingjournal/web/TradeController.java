@@ -40,7 +40,11 @@ public class TradeController {
             BigDecimal entryPrice,
             BigDecimal stopLossPrice,
             BigDecimal takeProfitPrice,
-            Instant createdAt
+            BigDecimal slPips,
+            BigDecimal tpPips,
+            BigDecimal rrRatio,
+            Instant createdAt,
+            Instant closedAt
     ) {
         static TradeResponse from(Trade t) {
             return new TradeResponse(
@@ -50,7 +54,11 @@ public class TradeController {
                     t.getEntryPrice(),
                     t.getStopLossPrice(),
                     t.getTakeProfitPrice(),
-                    t.getCreatedAt()
+                    t.getSlPips(),
+                    t.getTpPips(),
+                    t.getRrRatio(),
+                    t.getCreatedAt(),
+                    t.getClosedAt()
             );
         }
     }
