@@ -53,6 +53,8 @@ export default function App() {
     const [closedDatePreset, setClosedDatePreset] = useState("all");
     const [closedFromDate, setClosedFromDate] = useState("");
     const [closedToDate, setClosedToDate] = useState("");
+    const [currentPage, setCurrentPage] = useState(1);
+    const pageSize = 10;
 
     const SESSION_FILTER_OPTIONS = [
         "London",
@@ -532,6 +534,29 @@ export default function App() {
         });
     }, [trades, filters, datePreset, fromDate, toDate, closedDatePreset, closedFromDate, closedToDate]);
 
+    const sortedTrades = useMemo(() => filteredTrades, [filteredTrades]);
+    const totalPages = Math.ceil(sortedTrades.length / pageSize);
+    const pagedTrades = useMemo(() => {
+        const start = (currentPage - 1) * pageSize;
+        return sortedTrades.slice(start, start + pageSize);
+    }, [sortedTrades, currentPage]);
+    const paginationItems = useMemo(() => {
+        if (totalPages <= 1) return [];
+        if (totalPages <= 7) {
+            return Array.from({ length: totalPages }, (_, i) => i + 1);
+        }
+        const items = [1];
+        const start = Math.max(2, currentPage - 2);
+        const end = Math.min(totalPages - 1, currentPage + 2);
+        if (start > 2) items.push("ellipsis-start");
+        for (let i = start; i <= end; i += 1) {
+            items.push(i);
+        }
+        if (end < totalPages - 1) items.push("ellipsis-end");
+        items.push(totalPages);
+        return items;
+    }, [currentPage, totalPages]);
+
     const tradeCsvColumns = [
         { header: "Symbol", accessorFn: (trade) => formatSymbol(trade.symbol) },
         { header: "Direction", accessorKey: "direction" },
@@ -554,7 +579,7 @@ export default function App() {
         setIsExporting(true);
         try {
             const today = new Date().toISOString().slice(0, 10);
-            exportToCsv(`trades_${today}.csv`, filteredTrades, tradeCsvColumns);
+            exportToCsv(`trades_${today}.csv`, sortedTrades, tradeCsvColumns);
         } catch (err) {
             const message = String(err).replace(/^Error:\s*/, "");
             setError(message);
@@ -576,6 +601,18 @@ export default function App() {
     useEffect(() => {
         if (token) loadTrades();
     }, [token]);
+
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [filters, datePreset, fromDate, toDate, closedDatePreset, closedFromDate, closedToDate]);
+
+    useEffect(() => {
+        if (totalPages === 0) {
+            if (currentPage !== 1) setCurrentPage(1);
+            return;
+        }
+        if (currentPage > totalPages) setCurrentPage(totalPages);
+    }, [currentPage, totalPages]);
     return (
         <div className="app">
             <div className="stack">
@@ -943,12 +980,12 @@ export default function App() {
                                     </thead>
 
                                     <tbody>
-                                    {filteredTrades.length === 0 ? (
+                                    {sortedTrades.length === 0 ? (
                                         <tr>
                                             <td className="empty" colSpan={13}>No trades yet.</td>
                                         </tr>
                                     ) : (
-                                        filteredTrades.map((t) => (
+                                        pagedTrades.map((t) => (
                                             <tr key={t.id}>
                                                 <>
                                                     <td>{formatSymbol(t.symbol)}</td>
@@ -989,6 +1026,49 @@ export default function App() {
                                     </tbody>
                                 </table>
                             </div>
+                            {totalPages > 1 && (
+                                <div className="pagination">
+                                    <button
+                                        className="btn btn-sm pagination-btn"
+                                        onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                                        disabled={currentPage === 1}
+                                        type="button"
+                                    >
+                                        Prev
+                                    </button>
+                                    <div className="pagination-pages">
+                                        {paginationItems.map((item) => {
+                                            if (typeof item !== "number") {
+                                                return (
+                                                    <span key={item} className="pagination-ellipsis">
+                                                        ...
+                                                    </span>
+                                                );
+                                            }
+                                            const isActive = item === currentPage;
+                                            return (
+                                                <button
+                                                    key={item}
+                                                    className={`btn btn-sm pagination-btn${isActive ? " is-active" : ""}`}
+                                                    onClick={() => setCurrentPage(item)}
+                                                    type="button"
+                                                    aria-current={isActive ? "page" : undefined}
+                                                >
+                                                    {item}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                    <button
+                                        className="btn btn-sm pagination-btn"
+                                        onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+                                        disabled={currentPage === totalPages || totalPages === 0}
+                                        type="button"
+                                    >
+                                        Next
+                                    </button>
+                                </div>
+                            )}
                             {isEditOpen && (
                                 <>
                                     <div className="drawer-backdrop" onClick={cancelEditDrawer} />
