@@ -74,6 +74,20 @@ Example local-only config (do not commit):
 
     JWT_SECRET=change_me
 
+Backend env vars:
+- `GOOGLE_CLIENT_ID` (required for Google sign-in)
+- `CORS_ALLOWED_ORIGINS` (comma-separated, e.g. `http://localhost:5173,https://app.example.com`)
+- `PORT` (optional, defaults to 8080)
+
+Frontend env vars (Vite):
+- `VITE_GOOGLE_CLIENT_ID`
+- `VITE_API_BASE_URL` (optional, defaults to `http://localhost:8080`)
+
+Google OAuth setup notes (local + prod):
+- In Google Cloud Console, add an Authorized JavaScript origin for your frontend
+  (e.g. `http://localhost:5173` for dev and your real domain for production).
+- Ensure `CORS_ALLOWED_ORIGINS` includes the frontend origin(s).
+
 ## Git Workflow (Team Style)
 
 Start work:

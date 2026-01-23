@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
+import { GoogleLogin } from "@react-oauth/google";
 import { exportToCsv } from "./utils/exportCsv";
 import "./App.css";
 
-const API = "http://localhost:8080/api";
+const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080";
+const API = API_BASE.endsWith("/api") ? API_BASE : `${API_BASE}/api`;
 
 // Available currency pairs
 const CURRENCY_PAIRS = [
@@ -12,6 +14,8 @@ const CURRENCY_PAIRS = [
     { value: "USDCHF", label: "USD/CHF" },
     // ... add the rest of the pairs SLEDNO
 ];
+
+const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 
 export default function App() {
     const [email, setEmail] = useState("test@example.com");
@@ -67,6 +71,60 @@ export default function App() {
 
     function normalizeEmail(value) {
         return value.trim().toLowerCase();
+    }
+
+    function base64UrlDecode(value) {
+        const padded = value.replace(/-/g, "+").replace(/_/g, "/").padEnd(value.length + (4 - (value.length % 4)) % 4, "=");
+        return atob(padded);
+    }
+
+    function tryExtractEmailFromIdToken(idToken) {
+        try {
+            const payload = idToken.split(".")[1];
+            if (!payload) return null;
+            const json = base64UrlDecode(payload);
+            const data = JSON.parse(json);
+            return typeof data.email === "string" ? data.email : null;
+        } catch {
+            return null;
+        }
+    }
+
+    async function handleGoogleSuccess(credentialResponse) {
+        setError("");
+        const idToken = credentialResponse?.credential;
+        if (!idToken) {
+            setError("Google sign-in failed.");
+            return;
+        }
+
+        try {
+            const res = await fetch(`${API}/auth/google`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ idToken }),
+            });
+
+            if (!res.ok) {
+                const txt = (await res.text()).trim();
+                const message = txt && !txt.startsWith("<")
+                    ? txt
+                    : `Google login failed (${res.status}).`;
+                throw new Error(message);
+            }
+
+            const data = await res.json();
+            setToken(data.token);
+            localStorage.setItem("token", data.token);
+
+            const emailFromToken = tryExtractEmailFromIdToken(idToken);
+            if (emailFromToken) {
+                setEmail(emailFromToken);
+            }
+        } catch (err) {
+            const message = String(err).replace(/^Error:\s*/, "");
+            setError(message);
+        }
     }
 
     async function login(e) {
@@ -698,6 +756,26 @@ export default function App() {
                             <button className="btn btn-primary" type="submit">
                                 {authMode === "register" ? "Create account" : "Login"}
                             </button>
+                            <>
+                                <div className="auth-divider">
+                                    <span>or</span>
+                                </div>
+                                <div className="google-signin">
+                                    {googleClientId ? (
+                                        <GoogleLogin
+                                            onSuccess={handleGoogleSuccess}
+                                            onError={() => setError("Google sign-in failed.")}
+                                            text="continue_with"
+                                            shape="rectangular"
+                                            width="360"
+                                        />
+                                    ) : (
+                                        <span className="auth-warning">
+                                            Google login not configured (missing VITE_GOOGLE_CLIENT_ID)
+                                        </span>
+                                    )}
+                                </div>
+                            </>
                         </form>
                     </div>
                 ) : (

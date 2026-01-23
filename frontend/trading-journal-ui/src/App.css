@@ -435,6 +435,35 @@
   gap: 12px;
 }
 
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #8f98aa;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.auth-divider::before,
+.auth-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: #2a3044;
+}
+
+.google-signin {
+  display: flex;
+  justify-content: center;
+}
+
+.auth-warning {
+  font-size: 12px;
+  color: #fbbf24;
+  text-align: center;
+}
+
 .drawer-backdrop {
   position: fixed;
   inset: 0;
