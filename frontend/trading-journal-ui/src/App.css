@@ -34,6 +34,14 @@
   margin-bottom: 16px;
 }
 
+.table-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 .title {
   font-size: 30px;
   margin: 4px 0 6px;
