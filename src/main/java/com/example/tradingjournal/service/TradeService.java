@@ -11,7 +11,7 @@ public interface TradeService {
     List<Trade> myTrades();
 
     Trade findById(Long id);
-    Trade update(Long id, String symbol, String direction, BigDecimal entryPrice, BigDecimal stopLossPrice, BigDecimal takeProfitPrice, java.time.Instant closedAt);
+    Trade update(Long id, String symbol, String direction, BigDecimal entryPrice, BigDecimal stopLossPrice, BigDecimal takeProfitPrice, java.time.Instant closedAt, java.time.Instant createdAt);
     void delete(Long id);
 
 

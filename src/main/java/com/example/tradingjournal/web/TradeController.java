@@ -30,6 +30,7 @@ public class TradeController {
             @NotNull @Positive BigDecimal entryPrice, 
             @Positive BigDecimal stopLossPrice,
             @Positive BigDecimal takeProfitPrice,
+            Instant createdAt,
             Instant closedAt
     ) {}
     public record TradeResponse(
@@ -83,7 +84,8 @@ public TradeResponse update(@PathVariable Long id, @Valid @RequestBody CreateTra
                     req.entryPrice(),
                     req.stopLossPrice(),
                     req.takeProfitPrice(),
-                    req.closedAt()
+                    req.closedAt(),
+                    req.createdAt()
             )
     );
 }

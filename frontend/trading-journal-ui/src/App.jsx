@@ -31,6 +31,7 @@ export default function App() {
     const [editEntryPrice, setEditEntryPrice] = useState("");
     const [editStopLossPrice, setEditStopLossPrice] = useState("");
     const [editTakeProfitPrice, setEditTakeProfitPrice] = useState("");
+    const [editCreatedAt, setEditCreatedAt] = useState("");
     const [editClosedAt, setEditClosedAt] = useState("");
     const [confirmPassword, setConfirmPassword] = useState("");
 
@@ -285,6 +286,7 @@ export default function App() {
         setEditEntryPrice(trade.entryPrice?.toString() || "");
         setEditStopLossPrice(trade.stopLossPrice?.toString() || "");
         setEditTakeProfitPrice(trade.takeProfitPrice?.toString() || "");
+        setEditCreatedAt(toDateTimeLocalValue(trade.createdAt));
         setEditClosedAt(toDateTimeLocalValue(trade.closedAt));
         setError("");
     }
@@ -296,6 +298,7 @@ export default function App() {
         setEditEntryPrice("");
         setEditStopLossPrice("");
         setEditTakeProfitPrice("");
+        setEditCreatedAt("");
         setEditClosedAt("");
         setError("");
     }
@@ -307,9 +310,14 @@ export default function App() {
         const entryPriceNumber = Number(editEntryPrice);
         const stopLossNumber = editStopLossPrice === "" ? null : Number(editStopLossPrice);
         const takeProfitNumber = editTakeProfitPrice === "" ? null : Number(editTakeProfitPrice);
+        const createdAtIso = toIsoFromLocal(editCreatedAt);
         const closedAtIso = toIsoFromLocal(editClosedAt);
         if (!Number.isFinite(entryPriceNumber) || entryPriceNumber <= 0) {
             setError("Entry must be a positive number.");
+            return;
+        }
+        if (!createdAtIso) {
+            setError("Created time is required.");
             return;
         }
         if ((stopLossNumber === null) !== (takeProfitNumber === null)) {
@@ -337,6 +345,7 @@ export default function App() {
                     entryPrice: entryPriceNumber,
                     stopLossPrice: stopLossNumber,
                     takeProfitPrice: takeProfitNumber,
+                    createdAt: createdAtIso,
                     closedAt: closedAtIso,
                 }),
             });
@@ -950,7 +959,14 @@ export default function App() {
                                                         <td className="num">{t.slPips ?? "-"}</td>
                                                         <td className="num">{t.tpPips ?? "-"}</td>
                                                         <td className="num">{t.rrRatio ?? "-"}</td>
-                                                        <td>{formatDate(t.createdAt)}</td>
+                                                        <td>
+                                                            <input
+                                                                className="input"
+                                                                value={editCreatedAt}
+                                                                onChange={(e) => setEditCreatedAt(e.target.value)}
+                                                                type="datetime-local"
+                                                            />
+                                                        </td>
                                                         <td>
                                                             <input
                                                                 className="input"
@@ -959,8 +975,8 @@ export default function App() {
                                                                 type="datetime-local"
                                                             />
                                                         </td>
-                                                        <td>{formatDuration(t.createdAt, editClosedAt)}</td>
-                                                        <td>{getSessionLabel(t.createdAt)}</td>
+                                                        <td>{formatDuration(editCreatedAt, editClosedAt)}</td>
+                                                        <td>{getSessionLabel(editCreatedAt)}</td>
                                                         <td className="actions">
                                                             <div className="actions">
                                                                 <button

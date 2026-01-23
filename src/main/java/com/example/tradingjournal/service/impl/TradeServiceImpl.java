@@ -71,11 +71,15 @@ public class TradeServiceImpl implements TradeService {
     }
 
     @Override
-    public Trade update(Long id, String symbol, String direction, BigDecimal entryPrice, BigDecimal stopLossPrice, BigDecimal takeProfitPrice, Instant closedAt) {
+    public Trade update(Long id, String symbol, String direction, BigDecimal entryPrice, BigDecimal stopLossPrice, BigDecimal takeProfitPrice, Instant closedAt, Instant createdAt) {
         validateTradeInput(symbol, direction, entryPrice, stopLossPrice, takeProfitPrice);
         Metrics metrics = computeMetrics(symbol, direction, entryPrice, stopLossPrice, takeProfitPrice);
 
         Trade t = findOwnedTrade(id);
+        Instant createdAtToUse = createdAt != null ? createdAt : t.getCreatedAt();
+        if (createdAtToUse == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Created time is required");
+        }
         t.setSymbol(normalizeSymbol(symbol));
         t.setDirection(direction.toUpperCase());
         t.setEntryPrice(entryPrice);
@@ -85,6 +89,7 @@ public class TradeServiceImpl implements TradeService {
         t.setTpPips(metrics.tpPips());
         t.setRrRatio(metrics.rrRatio());
         t.setPipSizeUsed(metrics.pipSizeUsed());
+        t.setCreatedAt(createdAtToUse);
         t.setClosedAt(closedAt);
 
         return trades.save(t);
