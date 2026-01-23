@@ -274,6 +274,23 @@
   letter-spacing: 0.8px;
 }
 
+.table th.actions,
+.table td.actions {
+  display: table-cell;
+  position: sticky;
+  right: 0;
+  min-width: 160px;
+  width: 160px;
+  padding: 12px 14px;
+  background: #151925;
+  z-index: 2;
+}
+
+.table thead th.actions {
+  background: #121725;
+  z-index: 3;
+}
+
 .filter-row th {
   background: #101522;
   padding: 8px 10px;
@@ -282,6 +299,12 @@
   z-index: 0;
   text-transform: none;
   letter-spacing: 0;
+}
+
+.filter-row th.actions {
+  background: #101522;
+  padding: 8px 10px;
+  z-index: 3;
 }
 
 .filter-input {
@@ -303,7 +326,15 @@
   background: #141826;
 }
 
+.table tbody tr:nth-child(even) td.actions {
+  background: #141826;
+}
+
 .table tbody tr:hover td {
+  background: #1b2133;
+}
+
+.table tbody tr:hover td.actions {
   background: #1b2133;
 }
 
@@ -321,6 +352,7 @@
 .table td.actions .actions {
   display: inline-flex;
   align-items: flex-start;
+  justify-content: flex-end;
   white-space: nowrap;
 }
 
