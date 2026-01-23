@@ -34,6 +34,7 @@ export default function App() {
     const [editCreatedAt, setEditCreatedAt] = useState("");
     const [editClosedAt, setEditClosedAt] = useState("");
     const [confirmPassword, setConfirmPassword] = useState("");
+    const [isEditOpen, setIsEditOpen] = useState(false);
 
     const [error, setError] = useState("");
     const [isLoading, setIsLoading] = useState(false);
@@ -303,9 +304,20 @@ export default function App() {
         setError("");
     }
 
+    function cancelEditDrawer() {
+        setIsEditOpen(false);
+        setEditingId(null);
+        setError("");
+    }
+
     async function updateTrade(id, e) {
         e.preventDefault();
         setError("");
+
+        if (!id) {
+            setError("No trade selected.");
+            return;
+        }
 
         const entryPriceNumber = Number(editEntryPrice);
         const stopLossNumber = editStopLossPrice === "" ? null : Number(editStopLossPrice);
@@ -355,6 +367,7 @@ export default function App() {
                 throw new Error(`Update trade failed (${res.status}): ${txt}`);
             }
 
+            setIsEditOpen(false);
             setEditingId(null);
             await loadTrades();
         } catch (err) {
@@ -898,142 +911,147 @@ export default function App() {
                                     ) : (
                                         filteredTrades.map((t) => (
                                             <tr key={t.id}>
-                                                {editingId === t.id ? (
-                                                    <>
-                                                        <td>
-                                                            <select
-                                                                className="input"
-                                                                value={editSymbol}
-                                                                onChange={(e) => setEditSymbol(e.target.value)}
+                                                <>
+                                                    <td>{formatSymbol(t.symbol)}</td>
+                                                    <td>{t.direction}</td>
+                                                    <td className="num">{t.entryPrice ?? "-"}</td>
+                                                    <td className="num">{t.stopLossPrice ?? "-"}</td>
+                                                    <td className="num">{t.takeProfitPrice ?? "-"}</td>
+                                                    <td className="num">{t.slPips ?? "-"}</td>
+                                                    <td className="num">{t.tpPips ?? "-"}</td>
+                                                    <td className="num">{t.rrRatio ?? "-"}</td>
+                                                    <td>{formatDate(t.createdAt)}</td>
+                                                    <td>{formatDate(t.closedAt)}</td>
+                                                    <td>{formatDuration(t.createdAt, t.closedAt)}</td>
+                                                    <td>{getSessionLabel(t.createdAt)}</td>
+                                                    <td className="actions">
+                                                        <div className="actions">
+                                                            <button
+                                                                className="btn"
+                                                                onClick={() => {
+                                                                    startEdit(t);
+                                                                    setIsEditOpen(true);
+                                                                }}
                                                             >
-                                                                {CURRENCY_PAIRS.map((pair) => (
-                                                                    <option key={pair.value} value={pair.value}>
-                                                                        {pair.label}
-                                                                    </option>
-                                                                ))}
-                                                            </select>
-                                                        </td>
-                                                        <td>
-                                                            <select
-                                                                className="input"
-                                                                value={editDirection}
-                                                                onChange={(e) => setEditDirection(e.target.value)}
+                                                                Edit
+                                                            </button>
+                                                            <button
+                                                                className="btn btn-danger"
+                                                                onClick={() => deleteTrade(t.id)}
                                                             >
-                                                                <option value="LONG">LONG</option>
-                                                                <option value="SHORT">SHORT</option>
-                                                            </select>
-                                                        </td>
-                                                        <td className="num">
-                                                            <input
-                                                                className="input"
-                                                                value={editEntryPrice}
-                                                                onChange={(e) => setEditEntryPrice(e.target.value)}
-                                                                placeholder="Entry price"
-                                                                type="number"
-                                                                step="0.00001"
-                                                                min="0"
-                                                            />
-                                                        </td>
-                                                        <td className="num">
-                                                            <input
-                                                                className="input"
-                                                                value={editStopLossPrice}
-                                                                onChange={(e) => setEditStopLossPrice(e.target.value)}
-                                                                placeholder="Stop loss"
-                                                                type="number"
-                                                                step="0.00001"
-                                                                min="0"
-                                                            />
-                                                        </td>
-                                                        <td className="num">
-                                                            <input
-                                                                className="input"
-                                                                value={editTakeProfitPrice}
-                                                                onChange={(e) => setEditTakeProfitPrice(e.target.value)}
-                                                                placeholder="Take profit"
-                                                                type="number"
-                                                                step="0.00001"
-                                                                min="0"
-                                                            />
-                                                        </td>
-                                                        <td className="num">{t.slPips ?? "-"}</td>
-                                                        <td className="num">{t.tpPips ?? "-"}</td>
-                                                        <td className="num">{t.rrRatio ?? "-"}</td>
-                                                        <td>
-                                                            <input
-                                                                className="input"
-                                                                value={editCreatedAt}
-                                                                onChange={(e) => setEditCreatedAt(e.target.value)}
-                                                                type="datetime-local"
-                                                            />
-                                                        </td>
-                                                        <td>
-                                                            <input
-                                                                className="input"
-                                                                value={editClosedAt}
-                                                                onChange={(e) => setEditClosedAt(e.target.value)}
-                                                                type="datetime-local"
-                                                            />
-                                                        </td>
-                                                        <td>{formatDuration(editCreatedAt, editClosedAt)}</td>
-                                                        <td>{getSessionLabel(editCreatedAt)}</td>
-                                                        <td className="actions">
-                                                            <div className="actions">
-                                                                <button
-                                                                    type="button"
-                                                                    className="btn btn-primary"
-                                                                    onClick={(e) => updateTrade(t.id, e)}
-                                                                >
-                                                                    Save
-                                                                </button>
-                                                                <button
-                                                                    type="button"
-                                                                    className="btn"
-                                                                    onClick={cancelEdit}
-                                                                >
-                                                                    Cancel
-                                                                </button>
-                                                            </div>
-                                                        </td>
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <td>{formatSymbol(t.symbol)}</td>
-                                                        <td>{t.direction}</td>
-                                                        <td className="num">{t.entryPrice ?? "-"}</td>
-                                                        <td className="num">{t.stopLossPrice ?? "-"}</td>
-                                                        <td className="num">{t.takeProfitPrice ?? "-"}</td>
-                                                        <td className="num">{t.slPips ?? "-"}</td>
-                                                        <td className="num">{t.tpPips ?? "-"}</td>
-                                                        <td className="num">{t.rrRatio ?? "-"}</td>
-                                                        <td>{formatDate(t.createdAt)}</td>
-                                                        <td>{formatDate(t.closedAt)}</td>
-                                                        <td>{formatDuration(t.createdAt, t.closedAt)}</td>
-                                                        <td>{getSessionLabel(t.createdAt)}</td>
-                                                        <td className="actions">
-                                                            <div className="actions">
-                                                                <button
-                                                                    className="btn"
-                                                                    onClick={() => startEdit(t)}
-                                                                >
-                                                                    Edit
-                                                                </button>
-                                                                <button
-                                                                    className="btn btn-danger"
-                                                                    onClick={() => deleteTrade(t.id)}
-                                                                >
-                                                                    Delete
-                                                                </button>
-                                                            </div>
-                                                        </td>
-                                                    </>
-                                                )}
+                                                                Delete
+                                                            </button>
+                                                        </div>
+                                                    </td>
+                                                </>
                                             </tr>
                                         ))
                                     )}
                                     </tbody>
                                 </table>
                             </div>
+                            {isEditOpen && (
+                                <>
+                                    <div className="drawer-backdrop" onClick={cancelEditDrawer} />
+                                    <div className="drawer" onClick={(e) => e.stopPropagation()}>
+                                        <div className="drawer-header">
+                                            <h3 className="drawer-title">Edit trade</h3>
+                                        </div>
+                                        {error && <div className="banner error">{error}</div>}
+                                        <form onSubmit={(e) => updateTrade(editingId, e)}>
+                                            <div className="drawer-grid">
+                                                <label className="field">
+                                                    Symbol
+                                                    <select
+                                                        className="input"
+                                                        value={editSymbol}
+                                                        onChange={(e) => setEditSymbol(e.target.value)}
+                                                    >
+                                                        {CURRENCY_PAIRS.map((pair) => (
+                                                            <option key={pair.value} value={pair.value}>
+                                                                {pair.label}
+                                                            </option>
+                                                        ))}
+                                                    </select>
+                                                </label>
+                                                <label className="field">
+                                                    Direction
+                                                    <select
+                                                        className="input"
+                                                        value={editDirection}
+                                                        onChange={(e) => setEditDirection(e.target.value)}
+                                                    >
+                                                        <option value="LONG">LONG</option>
+                                                        <option value="SHORT">SHORT</option>
+                                                    </select>
+                                                </label>
+                                                <label className="field">
+                                                    Entry
+                                                    <input
+                                                        className="input"
+                                                        value={editEntryPrice}
+                                                        onChange={(e) => setEditEntryPrice(e.target.value)}
+                                                        placeholder="Entry price"
+                                                        type="number"
+                                                        step="0.00001"
+                                                        min="0"
+                                                    />
+                                                </label>
+                                                <label className="field">
+                                                    Stop Loss
+                                                    <input
+                                                        className="input"
+                                                        value={editStopLossPrice}
+                                                        onChange={(e) => setEditStopLossPrice(e.target.value)}
+                                                        placeholder="Stop loss"
+                                                        type="number"
+                                                        step="0.00001"
+                                                        min="0"
+                                                    />
+                                                </label>
+                                                <label className="field">
+                                                    Take Profit
+                                                    <input
+                                                        className="input"
+                                                        value={editTakeProfitPrice}
+                                                        onChange={(e) => setEditTakeProfitPrice(e.target.value)}
+                                                        placeholder="Take profit"
+                                                        type="number"
+                                                        step="0.00001"
+                                                        min="0"
+                                                    />
+                                                </label>
+                                                <label className="field">
+                                                    Created time
+                                                    <input
+                                                        className="input"
+                                                        value={editCreatedAt}
+                                                        onChange={(e) => setEditCreatedAt(e.target.value)}
+                                                        type="datetime-local"
+                                                    />
+                                                </label>
+                                                <label className="field">
+                                                    Closed time
+                                                    <input
+                                                        className="input"
+                                                        value={editClosedAt}
+                                                        onChange={(e) => setEditClosedAt(e.target.value)}
+                                                        type="datetime-local"
+                                                    />
+                                                </label>
+                                            </div>
+                                            <div className="drawer-actions">
+                                                <button type="button" className="btn" onClick={cancelEditDrawer}>
+                                                    Cancel
+                                                </button>
+                                                <button className="btn btn-primary" type="submit">
+                                                    Save
+                                                </button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                </>
+                            )}
                         </div>
                     </>
                 )}
