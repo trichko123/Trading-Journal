@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { exportToCsv } from "./utils/exportCsv";
 import "./App.css";
 
 const API = "http://localhost:8080/api";
@@ -38,6 +39,7 @@ export default function App() {
 
     const [error, setError] = useState("");
     const [isLoading, setIsLoading] = useState(false);
+    const [isExporting, setIsExporting] = useState(false);
     const BASE_SESSION_OFFSET = 1; // GMT+1
     const [filters, setFilters] = useState({
         symbol: "all",
@@ -144,6 +146,11 @@ export default function App() {
         const d = parseCreatedAt(value);
         if (!d) return "-";
         return d.toLocaleString();
+    }
+
+    function toIsoString(value) {
+        const d = parseCreatedAt(value);
+        return d ? d.toISOString() : "";
     }
 
     function toDateTimeLocalValue(value) {
@@ -525,6 +532,37 @@ export default function App() {
         });
     }, [trades, filters, datePreset, fromDate, toDate, closedDatePreset, closedFromDate, closedToDate]);
 
+    const tradeCsvColumns = [
+        { header: "Symbol", accessorFn: (trade) => formatSymbol(trade.symbol) },
+        { header: "Direction", accessorKey: "direction" },
+        { header: "Entry", accessorKey: "entryPrice" },
+        { header: "SL", accessorKey: "stopLossPrice" },
+        { header: "TP", accessorKey: "takeProfitPrice" },
+        { header: "SL pips", accessorKey: "slPips" },
+        { header: "TP pips", accessorKey: "tpPips" },
+        { header: "RR", accessorKey: "rrRatio" },
+        { header: "Created", accessorFn: (trade) => toIsoString(trade.createdAt) },
+        { header: "Closed", accessorFn: (trade) => toIsoString(trade.closedAt) },
+        { header: "Duration", accessorFn: (trade) => formatDuration(trade.createdAt, trade.closedAt) },
+        { header: "Session", accessorFn: (trade) => getSessionLabel(trade.createdAt) },
+        { header: "Actions", accessorFn: () => "" },
+    ];
+
+    function handleExportCsv() {
+        if (isExporting) return;
+        setError("");
+        setIsExporting(true);
+        try {
+            const today = new Date().toISOString().slice(0, 10);
+            exportToCsv(`trades_${today}.csv`, filteredTrades, tradeCsvColumns);
+        } catch (err) {
+            const message = String(err).replace(/^Error:\s*/, "");
+            setError(message);
+        } finally {
+            setIsExporting(false);
+        }
+    }
+
     function clearFilters() {
         setFilters({ symbol: "all", direction: "all", session: "all" });
         setDatePreset("all");
@@ -727,8 +765,17 @@ export default function App() {
                                             {trades.length} total | {filteredTrades.length} shown
                                         </p>
                                     </div>
-                                    {isLoading && <span className="loading">Loading trades...</span>}
-                                   
+                                    <div className="table-header-actions">
+                                        {isLoading && <span className="loading">Loading trades...</span>}
+                                        <button
+                                            className="btn btn-ghost btn-sm"
+                                            type="button"
+                                            onClick={handleExportCsv}
+                                            disabled={isExporting}
+                                        >
+                                            {isExporting ? "Exporting..." : "Export CSV"}
+                                        </button>
+                                    </div>
                                 </div>
                                 <div className="filter-bar">
                                     <span className="filter-title">Filter</span>
