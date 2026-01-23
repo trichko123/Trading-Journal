@@ -125,10 +125,23 @@ public class TradeServiceImpl implements TradeService {
         if (takeProfitPrice != null && takeProfitPrice.signum() <= 0) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Take profit price must be positive");
         }
-        if (stopLossPrice != null || takeProfitPrice != null) {
-            if (stopLossPrice == null || takeProfitPrice == null) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Stop Loss and Take Profit must both be provided to calculate pips and RR");
+        if (stopLossPrice != null) {
+            if (direction.equalsIgnoreCase("LONG") && stopLossPrice.compareTo(entryPrice) >= 0) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "For LONG, Stop Loss must be below Entry");
             }
+            if (direction.equalsIgnoreCase("SHORT") && stopLossPrice.compareTo(entryPrice) <= 0) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "For SHORT, Stop Loss must be above Entry");
+            }
+        }
+        if (takeProfitPrice != null) {
+            if (direction.equalsIgnoreCase("LONG") && takeProfitPrice.compareTo(entryPrice) <= 0) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "For LONG, Take Profit must be above Entry");
+            }
+            if (direction.equalsIgnoreCase("SHORT") && takeProfitPrice.compareTo(entryPrice) >= 0) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "For SHORT, Take Profit must be below Entry");
+            }
+        }
+        if (stopLossPrice != null && takeProfitPrice != null) {
             validateOrdering(direction, entryPrice, stopLossPrice, takeProfitPrice);
         }
     }
@@ -155,35 +168,47 @@ public class TradeServiceImpl implements TradeService {
     }
 
     private Metrics computeMetrics(String symbol, String direction, BigDecimal entryPrice, BigDecimal stopLossPrice, BigDecimal takeProfitPrice) {
-        if (stopLossPrice == null || takeProfitPrice == null) {
+        if (stopLossPrice == null && takeProfitPrice == null) {
             return Metrics.empty();
         }
 
         BigDecimal pipSize = pipSizeForSymbol(symbol);
-        BigDecimal risk;
-        BigDecimal reward;
+        BigDecimal slPips = null;
+        BigDecimal tpPips = null;
+        BigDecimal rrRatio = null;
 
-        if (direction.equalsIgnoreCase("LONG")) {
-            risk = entryPrice.subtract(stopLossPrice);
-            reward = takeProfitPrice.subtract(entryPrice);
-        } else {
-            risk = stopLossPrice.subtract(entryPrice);
-            reward = entryPrice.subtract(takeProfitPrice);
+        if (stopLossPrice != null) {
+            slPips = entryPrice.subtract(stopLossPrice).abs()
+                    .divide(pipSize, 4, RoundingMode.HALF_UP)
+                    .setScale(1, RoundingMode.HALF_UP);
         }
 
-        if (risk.signum() <= 0 || reward.signum() <= 0) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Risk and reward must be positive based on Entry/SL/TP ordering");
+        if (takeProfitPrice != null) {
+            tpPips = takeProfitPrice.subtract(entryPrice).abs()
+                    .divide(pipSize, 4, RoundingMode.HALF_UP)
+                    .setScale(1, RoundingMode.HALF_UP);
         }
 
-        BigDecimal slPips = entryPrice.subtract(stopLossPrice).abs()
-                .divide(pipSize, 4, RoundingMode.HALF_UP)
-                .setScale(1, RoundingMode.HALF_UP);
-        BigDecimal tpPips = takeProfitPrice.subtract(entryPrice).abs()
-                .divide(pipSize, 4, RoundingMode.HALF_UP)
-                .setScale(1, RoundingMode.HALF_UP);
-        BigDecimal rrRatio = reward
-                .divide(risk, 4, RoundingMode.HALF_UP)
-                .setScale(2, RoundingMode.HALF_UP);
+        if (stopLossPrice != null && takeProfitPrice != null) {
+            BigDecimal risk;
+            BigDecimal reward;
+
+            if (direction.equalsIgnoreCase("LONG")) {
+                risk = entryPrice.subtract(stopLossPrice);
+                reward = takeProfitPrice.subtract(entryPrice);
+            } else {
+                risk = stopLossPrice.subtract(entryPrice);
+                reward = entryPrice.subtract(takeProfitPrice);
+            }
+
+            if (risk.signum() <= 0 || reward.signum() <= 0) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Risk and reward must be positive based on Entry/SL/TP ordering");
+            }
+
+            rrRatio = reward
+                    .divide(risk, 4, RoundingMode.HALF_UP)
+                    .setScale(2, RoundingMode.HALF_UP);
+        }
 
         return new Metrics(slPips, tpPips, rrRatio, pipSize.setScale(4, RoundingMode.HALF_UP));
     }
