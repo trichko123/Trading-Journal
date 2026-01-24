@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { GoogleLogin } from "@react-oauth/google";
 import { exportToCsv } from "./utils/exportCsv";
 import "./App.css";
@@ -26,10 +26,15 @@ function TradeDetailsPanelLeft({
     formatDuration,
     formatSymbol,
     getSessionLabel,
+    formatOutcome,
     onCloseTrade,
     toDateTimeLocalValue,
 }) {
+    const ANIMATION_MS = 200;
     const [isClosing, setIsClosing] = useState(false);
+    const [shouldRender, setShouldRender] = useState(false);
+    const [isVisible, setIsVisible] = useState(false);
+    const [renderTrade, setRenderTrade] = useState(trade);
     const [closeExitPrice, setCloseExitPrice] = useState("");
     const [closeClosedAt, setCloseClosedAt] = useState("");
     const [closeReasonOverride, setCloseReasonOverride] = useState("");
@@ -37,12 +42,42 @@ function TradeDetailsPanelLeft({
     const [closeManualDescription, setCloseManualDescription] = useState("");
     const [closeError, setCloseError] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const panelRef = useRef(null);
+    const closeTimeoutRef = useRef(null);
+    const lastFocusedElementRef = useRef(null);
+    const bodyOverflowRef = useRef("");
     const safeToDateTimeLocalValue = useMemo(() => {
         if (typeof toDateTimeLocalValue === "function") {
             return toDateTimeLocalValue;
         }
         return () => "";
     }, [toDateTimeLocalValue]);
+    useEffect(() => {
+        if (trade) {
+            setRenderTrade(trade);
+        }
+    }, [trade]);
+    useEffect(() => {
+        if (open) {
+            if (closeTimeoutRef.current) {
+                clearTimeout(closeTimeoutRef.current);
+            }
+            setShouldRender(true);
+            requestAnimationFrame(() => setIsVisible(true));
+            return undefined;
+        }
+        if (shouldRender) {
+            setIsVisible(false);
+            closeTimeoutRef.current = setTimeout(() => {
+                setShouldRender(false);
+            }, ANIMATION_MS + 20);
+        }
+        return () => {
+            if (closeTimeoutRef.current) {
+                clearTimeout(closeTimeoutRef.current);
+            }
+        };
+    }, [open, shouldRender]);
     useEffect(() => {
         if (!open) return undefined;
         const handleKeydown = (event) => {
@@ -91,11 +126,11 @@ function TradeDetailsPanelLeft({
         const exitPrice = Number(exitPriceValue);
         if (!Number.isFinite(exitPrice)) return "";
         return deriveCloseReasonForPrices({
-            symbol: trade?.symbol,
+            symbol: renderTrade?.symbol,
             exitPrice,
-            takeProfitPrice: trade?.takeProfitPrice,
-            stopLossPrice: trade?.stopLossPrice,
-            entryPrice: trade?.entryPrice,
+            takeProfitPrice: renderTrade?.takeProfitPrice,
+            stopLossPrice: renderTrade?.stopLossPrice,
+            entryPrice: renderTrade?.entryPrice,
         });
     };
     useEffect(() => {
@@ -109,175 +144,287 @@ function TradeDetailsPanelLeft({
         setCloseClosedAt(safeToDateTimeLocalValue(new Date()));
     }, [open, trade?.id, safeToDateTimeLocalValue]);
 
-    if (!open || !trade) return null;
-
-    const closeReasonValue = getCloseReason(trade);
-    const detailRows = [
-        { label: "Status", value: trade.closedAt ? "CLOSED" : "OPEN" },
-        { label: "Entry", value: trade.entryPrice ?? "-" },
-        { label: "Exit", value: trade.exitPrice ?? emDash },
-        { label: "SL", value: trade.stopLossPrice ?? "-" },
-        { label: "TP", value: trade.takeProfitPrice ?? emDash },
-        { label: "SL pips", value: trade.slPips ?? "-" },
-        { label: "TP pips", value: trade.tpPips ?? "-" },
-        { label: "R/R", value: trade.rrRatio ?? "-" },
-        { label: "Session", value: getSessionLabel(trade.createdAt) ?? emDash },
-        { label: "Close Reason", value: closeReasonValue },
-        { label: "Created", value: formatDate(trade.createdAt) },
-        {
-            label: "Duration",
-            value: trade.duration ?? formatDuration(trade.createdAt, trade.closedAt) ?? emDash,
-        },
-    ];
-    if (closeReasonValue === "Manual") {
-        const insertIndex = Math.max(
-            0,
-            detailRows.findIndex((row) => row.label === "Close Reason") + 1
+    useEffect(() => {
+        if (!isVisible) return undefined;
+        const panel = panelRef.current;
+        if (!panel) return undefined;
+        lastFocusedElementRef.current = document.activeElement;
+        const focusable = panel.querySelectorAll(
+            'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
         );
-        detailRows.splice(insertIndex, 0, {
-            label: "Manual Reason",
-            value: trade.manualReason ?? emDash,
-        });
-        if (trade.manualReason === "Other" && trade.manualDescription) {
-            detailRows.splice(insertIndex + 1, 0, {
-                label: "Description",
-                value: trade.manualDescription,
-            });
+        const focusTarget = focusable[0] || panel;
+        if (typeof focusTarget?.focus === "function") {
+            focusTarget.focus();
         }
-    }
+        const handleKeydown = (event) => {
+            if (event.key !== "Tab") return;
+            const first = focusable[0];
+            const last = focusable[focusable.length - 1];
+            if (!first || !last) {
+                event.preventDefault();
+                panel.focus();
+                return;
+            }
+            if (event.shiftKey && document.activeElement === first) {
+                event.preventDefault();
+                last.focus();
+            } else if (!event.shiftKey && document.activeElement === last) {
+                event.preventDefault();
+                first.focus();
+            }
+        };
+        panel.addEventListener("keydown", handleKeydown);
+        return () => {
+            panel.removeEventListener("keydown", handleKeydown);
+            const lastFocused = lastFocusedElementRef.current;
+            if (lastFocused && typeof lastFocused.focus === "function") {
+                lastFocused.focus();
+            }
+        };
+    }, [isVisible]);
+    useEffect(() => {
+        if (!isVisible) return undefined;
+        bodyOverflowRef.current = document.body.style.overflow;
+        document.body.style.overflow = "hidden";
+        return () => {
+            document.body.style.overflow = bodyOverflowRef.current;
+        };
+    }, [isVisible]);
+
+    if (!shouldRender || !renderTrade) return null;
+
+    const activeTrade = renderTrade;
+    const isClosed = Boolean(activeTrade.closedAt);
+    const closeReasonValue = getCloseReason(activeTrade);
+    const outcomeValue = typeof formatOutcome === "function" ? formatOutcome(activeTrade) : emDash;
+    const titleValue = `${formatSymbol(activeTrade.symbol)} \u2022 ${activeTrade.direction}`;
+    const outcomeTone = outcomeValue && outcomeValue !== emDash
+        ? (String(outcomeValue).startsWith("-") ? "is-negative" : "is-positive")
+        : "is-neutral";
+    const formatRowValue = (value) => {
+        const isEmpty = value == null || value === "" || value === "-";
+        const displayValue = isEmpty ? emDash : value;
+        return { displayValue, isMuted: displayValue === emDash };
+    };
+    const DetailRow = ({ label, value }) => {
+        const { displayValue, isMuted } = formatRowValue(value);
+        return (
+            <div className="drawer-detail-row">
+                <span className="drawer-detail-label">{label}</span>
+                <span className={`drawer-detail-value${isMuted ? " is-muted" : ""}`}>{displayValue}</span>
+            </div>
+        );
+    };
 
     return (
         <>
-            <div className="drawer-backdrop" onClick={onClose} />
-            <div className="drawer drawer-left" onClick={(e) => e.stopPropagation()}>
-                <div className="drawer-header">
-                    <h3 className="drawer-title">
-                        {formatSymbol(trade.symbol)} {"\u2022"} {trade.direction}
-                    </h3>
-                    <button
-                        type="button"
-                        className="btn btn-ghost btn-sm drawer-close"
-                        aria-label="Close details panel"
-                        onClick={onClose}
-                    >x</button>
-                </div>
-                <div className="drawer-details">
-                    {detailRows.map((row) => (
-                        <div key={row.label} className="drawer-detail-row">
-                            <span className="drawer-detail-label">{row.label}</span>
-                            <span className="drawer-detail-value">{row.value}</span>
+            <div className={`drawer-backdrop drawer-backdrop-animated${isVisible ? " is-open" : ""}`} onClick={onClose} />
+            <div
+                ref={panelRef}
+                className={`drawer drawer-left drawer-panel drawer-animated${isVisible ? " is-open" : ""}`}
+                onClick={(e) => e.stopPropagation()}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="trade-details-title"
+                tabIndex={-1}
+            >
+                <div className="drawer-scroll">
+                    <div className="drawer-header">
+                        <div className="drawer-title-wrap">
+                            <h3 className="drawer-title" id="trade-details-title">
+                                {titleValue}
+                            </h3>
+                            <div className="drawer-badges">
+                                <span className={`badge status-badge ${isClosed ? "is-closed" : "is-open"}`}>
+                                    {isClosed ? "CLOSED" : "OPEN"}
+                                </span>
+                                <span className={`badge outcome-badge ${outcomeTone}`}>
+                                    {outcomeValue}
+                                </span>
+                            </div>
                         </div>
-                    ))}
-                </div>
-                {!trade.closedAt && !isClosing && (
-                    <div className="drawer-actions">
                         <button
                             type="button"
-                            className="btn btn-primary"
-                            onClick={() => {
-                                setCloseClosedAt(safeToDateTimeLocalValue(new Date()));
-                                setCloseExitPrice("");
-                                setCloseReasonOverride("");
-                                setCloseError("");
-                                setIsClosing(true);
-                            }}
+                            className="btn btn-ghost btn-sm drawer-close"
+                            aria-label="Close details panel"
+                            onClick={onClose}
                         >
-                            Close trade
+                            {"\u00d7"}
                         </button>
                     </div>
-                )}
-                {!trade.closedAt && isClosing && (
-                    <div>
-                        {closeError && <div className="banner error">{closeError}</div>}
-                        <div className="drawer-grid">
-                            <label className="field">
-                                Exit Price
-                                <input
-                                    className="input"
-                                    value={closeExitPrice}
-                                    onChange={(e) => {
-                                        const nextValue = e.target.value;
-                                        setCloseExitPrice(nextValue);
-                                        const nextReason = deriveCloseReasonFromExit(nextValue);
-                                        if (nextReason) {
+
+                    <div className="drawer-sections">
+                        <div className="drawer-section">
+                            <h4 className="drawer-section-title">Levels</h4>
+                            <div className="drawer-section-body">
+                                <DetailRow label="Entry" value={activeTrade.entryPrice} />
+                                <DetailRow label="Exit" value={activeTrade.exitPrice} />
+                                <DetailRow label="SL" value={activeTrade.stopLossPrice} />
+                                <DetailRow label="TP" value={activeTrade.takeProfitPrice} />
+                            </div>
+                        </div>
+                        <div className="drawer-section">
+                            <h4 className="drawer-section-title">Risk/Targets</h4>
+                            <div className="drawer-section-body">
+                                <DetailRow label="SL pips" value={activeTrade.slPips} />
+                                <DetailRow label="TP pips" value={activeTrade.tpPips} />
+                                <DetailRow label="R/R" value={activeTrade.rrRatio} />
+                            </div>
+                        </div>
+                        <div className="drawer-section">
+                            <h4 className="drawer-section-title">Context</h4>
+                            <div className="drawer-section-body">
+                                <DetailRow label="Session" value={getSessionLabel(activeTrade.createdAt)} />
+                            </div>
+                        </div>
+                        {isClosed && (
+                            <div className="drawer-section">
+                                <h4 className="drawer-section-title">Close</h4>
+                                <div className="drawer-section-body">
+                                    <DetailRow label="Close Reason" value={closeReasonValue} />
+                                    {closeReasonValue === "Manual" && (
+                                        <DetailRow label="Manual Reason" value={activeTrade.manualReason} />
+                                    )}
+                                    {closeReasonValue === "Manual" && activeTrade.manualReason === "Other" && (
+                                        <DetailRow label="Description" value={activeTrade.manualDescription} />
+                                    )}
+                                </div>
+                            </div>
+                        )}
+                        <div className="drawer-section">
+                            <h4 className="drawer-section-title">Time</h4>
+                            <div className="drawer-section-body">
+                                <DetailRow label="Created" value={formatDate(activeTrade.createdAt)} />
+                                <DetailRow
+                                    label="Duration"
+                                    value={activeTrade.duration ?? formatDuration(activeTrade.createdAt, activeTrade.closedAt)}
+                                />
+                            </div>
+                        </div>
+                    </div>
+
+                    {!isClosed && isClosing && (
+                        <div className="drawer-close-form">
+                            {closeError && <div className="banner error">{closeError}</div>}
+                            <div className="drawer-grid">
+                                <label className="field">
+                                    Exit Price
+                                    <input
+                                        className="input"
+                                        value={closeExitPrice}
+                                        onChange={(e) => {
+                                            const nextValue = e.target.value;
+                                            setCloseExitPrice(nextValue);
+                                            const nextReason = deriveCloseReasonFromExit(nextValue);
+                                            if (nextReason) {
+                                                setCloseReasonOverride(nextReason);
+                                                if (nextReason !== "Manual") {
+                                                    setCloseManualReason("");
+                                                    setCloseManualDescription("");
+                                                }
+                                            }
+                                        }}
+                                        placeholder="Exit price"
+                                        type="number"
+                                        step="0.00001"
+                                        min="0"
+                                    />
+                                </label>
+                                <label className="field">
+                                    Closed Time
+                                    <input
+                                        className="input"
+                                        value={closeClosedAt}
+                                        onChange={(e) => setCloseClosedAt(e.target.value)}
+                                        type="datetime-local"
+                                    />
+                                </label>
+                                <label className="field">
+                                    Close Reason
+                                    <select
+                                        className="input"
+                                        value={closeReasonOverride}
+                                        onChange={(e) => {
+                                            const nextReason = e.target.value;
                                             setCloseReasonOverride(nextReason);
                                             if (nextReason !== "Manual") {
                                                 setCloseManualReason("");
                                                 setCloseManualDescription("");
                                             }
-                                        }
-                                    }}
-                                    placeholder="Exit price"
-                                    type="number"
-                                    step="0.00001"
-                                    min="0"
-                                />
-                            </label>
-                            <label className="field">
-                                Closed Time
-                                <input
-                                    className="input"
-                                    value={closeClosedAt}
-                                    onChange={(e) => setCloseClosedAt(e.target.value)}
-                                    type="datetime-local"
-                                />
-                            </label>
-                            <label className="field">
-                                Close Reason
-                                <select
-                                    className="input"
-                                    value={closeReasonOverride}
-                                    onChange={(e) => {
-                                        const nextReason = e.target.value;
-                                        setCloseReasonOverride(nextReason);
-                                        if (nextReason !== "Manual") {
-                                            setCloseManualReason("");
-                                            setCloseManualDescription("");
-                                        }
-                                    }}
-                                >
-                                    <option value="">None</option>
-                                    <option value="TP">TP</option>
-                                    <option value="SL">SL</option>
-                                    <option value="BreakEven">BreakEven</option>
-                                    <option value="Manual">Manual</option>
-                                </select>
-                            </label>
-                            {closeReasonOverride === "Manual" && (
-                                <label className="field">
-                                    Manual Reason
-                                    <select
-                                        className="input"
-                                        value={closeManualReason}
-                                        onChange={(e) => {
-                                            const nextReason = e.target.value;
-                                            setCloseManualReason(nextReason);
-                                            if (nextReason !== "Other") {
-                                                setCloseManualDescription("");
-                                            }
                                         }}
                                     >
-                                        <option value="">Select reason</option>
-                                        <option value="News release">News release</option>
-                                        <option value="Market Friday closing">Market Friday closing</option>
-                                        <option value="Other">Other</option>
+                                        <option value="">None</option>
+                                        <option value="TP">TP</option>
+                                        <option value="SL">SL</option>
+                                        <option value="BreakEven">BreakEven</option>
+                                        <option value="Manual">Manual</option>
                                     </select>
                                 </label>
-                            )}
-                            {closeReasonOverride === "Manual" && closeManualReason === "Other" && (
-                                <label className="field">
-                                    Description
-                                    <textarea
-                                        className="input"
-                                        value={closeManualDescription}
-                                        onChange={(e) => setCloseManualDescription(e.target.value)}
-                                        placeholder="Describe the reason"
-                                        rows={3}
-                                    />
-                                </label>
-                            )}
+                                {closeReasonOverride === "Manual" && (
+                                    <label className="field">
+                                        Manual Reason
+                                        <select
+                                            className="input"
+                                            value={closeManualReason}
+                                            onChange={(e) => {
+                                                const nextReason = e.target.value;
+                                                setCloseManualReason(nextReason);
+                                                if (nextReason !== "Other") {
+                                                    setCloseManualDescription("");
+                                                }
+                                            }}
+                                        >
+                                            <option value="">Select reason</option>
+                                            <option value="News release">News release</option>
+                                            <option value="Market Friday closing">Market Friday closing</option>
+                                            <option value="Other">Other</option>
+                                        </select>
+                                    </label>
+                                )}
+                                {closeReasonOverride === "Manual" && closeManualReason === "Other" && (
+                                    <label className="field">
+                                        Description
+                                        <textarea
+                                            className="input"
+                                            value={closeManualDescription}
+                                            onChange={(e) => setCloseManualDescription(e.target.value)}
+                                            placeholder="Describe the reason"
+                                            rows={3}
+                                        />
+                                    </label>
+                                )}
+                            </div>
                         </div>
-                        <div className="drawer-actions">
+                    )}
+                </div>
+
+                <div className="drawer-panel-footer">
+                    {!isClosed && !isClosing && (
+                        <div className="drawer-panel-actions">
+                            <button
+                                type="button"
+                                className="btn btn-primary"
+                                onClick={() => {
+                                    setCloseClosedAt(safeToDateTimeLocalValue(new Date()));
+                                    setCloseExitPrice("");
+                                    setCloseReasonOverride("");
+                                    setCloseError("");
+                                    setIsClosing(true);
+                                }}
+                            >
+                                Close trade
+                            </button>
+                        </div>
+                    )}
+                    {isClosed && (
+                        <div className="drawer-panel-actions">
+                            <button type="button" className="btn btn-ghost" disabled>
+                                Closed
+                            </button>
+                        </div>
+                    )}
+                    {!isClosed && isClosing && (
+                        <div className="drawer-panel-actions">
                             <button
                                 type="button"
                                 className="btn"
@@ -314,7 +461,7 @@ function TradeDetailsPanelLeft({
                                         if (typeof onCloseTrade !== "function") {
                                             throw new Error("Close trade handler is not available.");
                                         }
-                                        await onCloseTrade(trade, {
+                                        await onCloseTrade(activeTrade, {
                                             exitPrice: exitPriceNumber,
                                             closedAtLocal: closeClosedAt,
                                             closeReasonOverride: closeReasonOverride || null,
@@ -335,8 +482,8 @@ function TradeDetailsPanelLeft({
                                 Confirm
                             </button>
                         </div>
-                    </div>
-                )}
+                    )}
+                </div>
             </div>
         </>
     );
@@ -1729,6 +1876,7 @@ export default function App() {
                                 formatDuration={formatDuration}
                                 formatSymbol={formatSymbol}
                                 getSessionLabel={getSessionLabel}
+                                formatOutcome={formatOutcome}
                                 onCloseTrade={closeTradeInline}
                                 toDateTimeLocalValue={toDateTimeLocalValue}
                             />
