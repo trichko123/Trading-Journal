@@ -548,24 +548,29 @@ export default function App() {
         "New York / Asian",
     ];
 
-    function formatOutcome(trade) {
-        const emDash = "\u2014";
-        if (!trade?.closedAt) return emDash;
-        if (trade.exitPrice == null) return emDash;
-        if (trade.stopLossPrice == null) return emDash;
+    function computeOutcomeR(trade) {
+        if (!trade?.closedAt) return null;
+        if (trade.exitPrice == null) return null;
+        if (trade.stopLossPrice == null) return null;
         const entry = Number(trade.entryPrice);
         const exit = Number(trade.exitPrice);
         const stopLoss = Number(trade.stopLossPrice);
-        if (!Number.isFinite(entry) || !Number.isFinite(exit) || !Number.isFinite(stopLoss)) return emDash;
+        if (!Number.isFinite(entry) || !Number.isFinite(exit) || !Number.isFinite(stopLoss)) return null;
 
         const direction = trade.direction?.toUpperCase();
         const risk = direction === "SHORT" ? (stopLoss - entry) : (entry - stopLoss);
-        if (!Number.isFinite(risk) || risk <= 0) return emDash;
+        if (!Number.isFinite(risk) || risk <= 0) return null;
 
         const reward = direction === "SHORT" ? (entry - exit) : (exit - entry);
         const rValue = reward / risk;
-        if (!Number.isFinite(rValue)) return emDash;
+        if (!Number.isFinite(rValue)) return null;
+        return rValue;
+    }
 
+    function formatOutcome(trade) {
+        const emDash = "\u2014";
+        const rValue = computeOutcomeR(trade);
+        if (!Number.isFinite(rValue)) return emDash;
         const sign = rValue > 0 ? "+" : "";
         return `${sign}${rValue.toFixed(2)}R`;
     }
@@ -1200,6 +1205,32 @@ export default function App() {
         });
     }, [trades, filters, datePreset, fromDate, toDate, closedDatePreset, closedFromDate, closedToDate]);
 
+    const summaryStats = useMemo(() => {
+        const outcomes = [];
+        let excluded = 0;
+        filteredTrades.forEach((trade) => {
+            const rValue = computeOutcomeR(trade);
+            if (Number.isFinite(rValue)) {
+                outcomes.push(rValue);
+            } else {
+                excluded += 1;
+            }
+        });
+        const numericCount = outcomes.length;
+        const sum = outcomes.reduce((acc, value) => acc + value, 0);
+        const winCount = outcomes.filter((value) => value > 0).length;
+        const average = numericCount ? sum / numericCount : null;
+        const winPct = numericCount ? (winCount / numericCount) * 100 : null;
+        return {
+            tradeCount: filteredTrades.length,
+            excluded,
+            numericCount,
+            sum,
+            average,
+            winPct,
+        };
+    }, [filteredTrades]);
+
     const sortedTrades = useMemo(() => filteredTrades, [filteredTrades]);
     const totalPages = Math.ceil(sortedTrades.length / pageSize);
     const pagedTrades = useMemo(() => {
@@ -1279,6 +1310,21 @@ export default function App() {
         }
         if (currentPage > totalPages) setCurrentPage(totalPages);
     }, [currentPage, totalPages]);
+
+    const emDash = "\u2014";
+    const formatRValue = (value) => {
+        if (!Number.isFinite(value)) return emDash;
+        const sign = value > 0 ? "+" : "";
+        return `${sign}${value.toFixed(2)}R`;
+    };
+    const formatWinPct = (value) => {
+        if (!Number.isFinite(value)) return emDash;
+        const rounded = Math.round(value);
+        if (Math.abs(value - rounded) < 0.05) {
+            return `${rounded}%`;
+        }
+        return `${value.toFixed(1)}%`;
+    };
     return (
         <div className="app">
             <div className="stack">
@@ -1567,6 +1613,55 @@ export default function App() {
                                             </button>
                                         )}
                                     </div>
+                                </div>
+                                <div className="summary-bar">
+                                    <div className="summary-stat">
+                                        <span className="summary-label">Result (R)</span>
+                                        <span
+                                            className={`summary-value${
+                                                summaryStats.numericCount
+                                                    ? summaryStats.sum > 0
+                                                        ? " is-positive"
+                                                        : summaryStats.sum < 0
+                                                            ? " is-negative"
+                                                            : ""
+                                                    : " is-muted"
+                                            }`}
+                                        >
+                                            {summaryStats.numericCount ? formatRValue(summaryStats.sum) : emDash}
+                                        </span>
+                                    </div>
+                                    <div className="summary-stat">
+                                        <span className="summary-label">Trades</span>
+                                        <span className="summary-value">{summaryStats.tradeCount}</span>
+                                    </div>
+                                    <div className="summary-stat">
+                                        <span className="summary-label">Win %</span>
+                                        <span className={`summary-value${summaryStats.numericCount ? "" : " is-muted"}`}>
+                                            {summaryStats.numericCount ? formatWinPct(summaryStats.winPct) : emDash}
+                                        </span>
+                                    </div>
+                                    <div className="summary-stat">
+                                        <span className="summary-label">Avg R</span>
+                                        <span
+                                            className={`summary-value${
+                                                summaryStats.numericCount
+                                                    ? summaryStats.average > 0
+                                                        ? " is-positive"
+                                                        : summaryStats.average < 0
+                                                            ? " is-negative"
+                                                            : ""
+                                                    : " is-muted"
+                                            }`}
+                                        >
+                                            {summaryStats.numericCount ? formatRValue(summaryStats.average) : emDash}
+                                        </span>
+                                    </div>
+                                    {summaryStats.excluded > 0 && (
+                                        <div className="summary-note">
+                                            ({summaryStats.excluded} excluded)
+                                        </div>
+                                    )}
                                 </div>
                             <div className="table-wrap">
                                 <table className="table">
