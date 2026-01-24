@@ -21,6 +21,10 @@ public class Trade {
     private BigDecimal exitPrice;
     @Column(name = "close_reason_override", length = 20)
     private String closeReasonOverride;
+    @Column(name = "manual_reason", length = 50)
+    private String manualReason;
+    @Column(name = "manual_description", length = 500)
+    private String manualDescription;
     private BigDecimal stopLossPrice;
     private BigDecimal takeProfitPrice;
     private BigDecimal slPips;
@@ -112,6 +116,22 @@ public class Trade {
 
     public void setCloseReasonOverride(String closeReasonOverride) {
         this.closeReasonOverride = closeReasonOverride;
+    }
+
+    public String getManualReason() {
+        return manualReason;
+    }
+
+    public void setManualReason(String manualReason) {
+        this.manualReason = manualReason;
+    }
+
+    public String getManualDescription() {
+        return manualDescription;
+    }
+
+    public void setManualDescription(String manualDescription) {
+        this.manualDescription = manualDescription;
     }
 
     public BigDecimal getStopLossPrice() {

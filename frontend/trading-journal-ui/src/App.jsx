@@ -33,6 +33,8 @@ function TradeDetailsPanelLeft({
     const [closeExitPrice, setCloseExitPrice] = useState("");
     const [closeClosedAt, setCloseClosedAt] = useState("");
     const [closeReasonOverride, setCloseReasonOverride] = useState("");
+    const [closeManualReason, setCloseManualReason] = useState("");
+    const [closeManualDescription, setCloseManualDescription] = useState("");
     const [closeError, setCloseError] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
     const safeToDateTimeLocalValue = useMemo(() => {
@@ -53,33 +55,48 @@ function TradeDetailsPanelLeft({
     }, [open, onClose]);
 
     const emDash = "\u2014";
-    const tolerance = 0.0001;
-    const approxEqual = (a, b) => Math.abs(a - b) <= tolerance;
+    const getPipSizeForSymbol = (symbol) => (
+        symbol?.toUpperCase().includes("JPY") ? 0.01 : 0.0001
+    );
+    const deriveCloseReasonForPrices = ({ symbol, exitPrice, takeProfitPrice, stopLossPrice, entryPrice }) => {
+        const exit = Number(exitPrice);
+        if (!Number.isFinite(exit)) return "";
+        const pipSize = getPipSizeForSymbol(symbol);
+        const tpTolerance = 2 * pipSize;
+        const breakevenTolerance = 3 * pipSize;
+        const tp = takeProfitPrice == null ? null : Number(takeProfitPrice);
+        const sl = stopLossPrice == null ? null : Number(stopLossPrice);
+        const entry = entryPrice == null ? null : Number(entryPrice);
+
+        if (tp != null && Number.isFinite(tp) && Math.abs(exit - tp) <= tpTolerance) return "TP";
+        if (sl != null && Number.isFinite(sl) && Math.abs(exit - sl) <= tpTolerance) return "SL";
+        if (entry != null && Number.isFinite(entry) && Math.abs(exit - entry) <= breakevenTolerance) return "BreakEven";
+        return "Manual";
+    };
     const getCloseReason = (t) => {
         if (!t?.closedAt || t.exitPrice == null) return emDash;
-        if (t.closeReasonOverride) return t.closeReasonOverride;
         const exitPrice = Number(t.exitPrice);
         if (!Number.isFinite(exitPrice)) return emDash;
-        const tp = t.takeProfitPrice == null ? null : Number(t.takeProfitPrice);
-        const sl = t.stopLossPrice == null ? null : Number(t.stopLossPrice);
-        const entry = t.entryPrice == null ? null : Number(t.entryPrice);
-
-        if (tp != null && Number.isFinite(tp) && approxEqual(exitPrice, tp)) return "TP";
-        if (sl != null && Number.isFinite(sl) && approxEqual(exitPrice, sl)) return "SL";
-        if (entry != null && Number.isFinite(entry) && approxEqual(exitPrice, entry)) return "BreakEven";
-        return "Manual";
+        const derived = deriveCloseReasonForPrices({
+            symbol: t.symbol,
+            exitPrice,
+            takeProfitPrice: t.takeProfitPrice,
+            stopLossPrice: t.stopLossPrice,
+            entryPrice: t.entryPrice,
+        });
+        if (t.closeReasonOverride) return t.closeReasonOverride;
+        return derived || emDash;
     };
     const deriveCloseReasonFromExit = (exitPriceValue) => {
         const exitPrice = Number(exitPriceValue);
         if (!Number.isFinite(exitPrice)) return "";
-        const tp = trade?.takeProfitPrice == null ? null : Number(trade.takeProfitPrice);
-        const sl = trade?.stopLossPrice == null ? null : Number(trade.stopLossPrice);
-        const entry = trade?.entryPrice == null ? null : Number(trade.entryPrice);
-
-        if (tp != null && Number.isFinite(tp) && approxEqual(exitPrice, tp)) return "TP";
-        if (sl != null && Number.isFinite(sl) && approxEqual(exitPrice, sl)) return "SL";
-        if (entry != null && Number.isFinite(entry) && approxEqual(exitPrice, entry)) return "BreakEven";
-        return "Manual";
+        return deriveCloseReasonForPrices({
+            symbol: trade?.symbol,
+            exitPrice,
+            takeProfitPrice: trade?.takeProfitPrice,
+            stopLossPrice: trade?.stopLossPrice,
+            entryPrice: trade?.entryPrice,
+        });
     };
     useEffect(() => {
         if (!open || !trade) return;
@@ -87,11 +104,14 @@ function TradeDetailsPanelLeft({
         setCloseError("");
         setCloseExitPrice("");
         setCloseReasonOverride(trade.closeReasonOverride ?? "");
+        setCloseManualReason(trade.manualReason ?? "");
+        setCloseManualDescription(trade.manualDescription ?? "");
         setCloseClosedAt(safeToDateTimeLocalValue(new Date()));
     }, [open, trade?.id, safeToDateTimeLocalValue]);
 
     if (!open || !trade) return null;
 
+    const closeReasonValue = getCloseReason(trade);
     const detailRows = [
         { label: "Status", value: trade.closedAt ? "CLOSED" : "OPEN" },
         { label: "Entry", value: trade.entryPrice ?? "-" },
@@ -102,13 +122,29 @@ function TradeDetailsPanelLeft({
         { label: "TP pips", value: trade.tpPips ?? "-" },
         { label: "R/R", value: trade.rrRatio ?? "-" },
         { label: "Session", value: getSessionLabel(trade.createdAt) ?? emDash },
-        { label: "Close Reason", value: getCloseReason(trade) },
+        { label: "Close Reason", value: closeReasonValue },
         { label: "Created", value: formatDate(trade.createdAt) },
         {
             label: "Duration",
             value: trade.duration ?? formatDuration(trade.createdAt, trade.closedAt) ?? emDash,
         },
     ];
+    if (closeReasonValue === "Manual") {
+        const insertIndex = Math.max(
+            0,
+            detailRows.findIndex((row) => row.label === "Close Reason") + 1
+        );
+        detailRows.splice(insertIndex, 0, {
+            label: "Manual Reason",
+            value: trade.manualReason ?? emDash,
+        });
+        if (trade.manualReason === "Other" && trade.manualDescription) {
+            detailRows.splice(insertIndex + 1, 0, {
+                label: "Description",
+                value: trade.manualDescription,
+            });
+        }
+    }
 
     return (
         <>
@@ -165,6 +201,10 @@ function TradeDetailsPanelLeft({
                                         const nextReason = deriveCloseReasonFromExit(nextValue);
                                         if (nextReason) {
                                             setCloseReasonOverride(nextReason);
+                                            if (nextReason !== "Manual") {
+                                                setCloseManualReason("");
+                                                setCloseManualDescription("");
+                                            }
                                         }
                                     }}
                                     placeholder="Exit price"
@@ -187,7 +227,14 @@ function TradeDetailsPanelLeft({
                                 <select
                                     className="input"
                                     value={closeReasonOverride}
-                                    onChange={(e) => setCloseReasonOverride(e.target.value)}
+                                    onChange={(e) => {
+                                        const nextReason = e.target.value;
+                                        setCloseReasonOverride(nextReason);
+                                        if (nextReason !== "Manual") {
+                                            setCloseManualReason("");
+                                            setCloseManualDescription("");
+                                        }
+                                    }}
                                 >
                                     <option value="">None</option>
                                     <option value="TP">TP</option>
@@ -196,6 +243,39 @@ function TradeDetailsPanelLeft({
                                     <option value="Manual">Manual</option>
                                 </select>
                             </label>
+                            {closeReasonOverride === "Manual" && (
+                                <label className="field">
+                                    Manual Reason
+                                    <select
+                                        className="input"
+                                        value={closeManualReason}
+                                        onChange={(e) => {
+                                            const nextReason = e.target.value;
+                                            setCloseManualReason(nextReason);
+                                            if (nextReason !== "Other") {
+                                                setCloseManualDescription("");
+                                            }
+                                        }}
+                                    >
+                                        <option value="">Select reason</option>
+                                        <option value="News release">News release</option>
+                                        <option value="Market Friday closing">Market Friday closing</option>
+                                        <option value="Other">Other</option>
+                                    </select>
+                                </label>
+                            )}
+                            {closeReasonOverride === "Manual" && closeManualReason === "Other" && (
+                                <label className="field">
+                                    Description
+                                    <textarea
+                                        className="input"
+                                        value={closeManualDescription}
+                                        onChange={(e) => setCloseManualDescription(e.target.value)}
+                                        placeholder="Describe the reason"
+                                        rows={3}
+                                    />
+                                </label>
+                            )}
                         </div>
                         <div className="drawer-actions">
                             <button
@@ -218,6 +298,16 @@ function TradeDetailsPanelLeft({
                                         setCloseError("Exit Price must be a positive number.");
                                         return;
                                     }
+                                    if (closeReasonOverride === "Manual") {
+                                        if (!closeManualReason) {
+                                            setCloseError("Manual Reason is required when Close Reason is Manual.");
+                                            return;
+                                        }
+                                        if (closeManualReason === "Other" && !closeManualDescription.trim()) {
+                                            setCloseError("Description is required when Manual Reason is Other.");
+                                            return;
+                                        }
+                                    }
                                     setCloseError("");
                                     setIsSubmitting(true);
                                     try {
@@ -228,6 +318,11 @@ function TradeDetailsPanelLeft({
                                             exitPrice: exitPriceNumber,
                                             closedAtLocal: closeClosedAt,
                                             closeReasonOverride: closeReasonOverride || null,
+                                            manualReason: closeReasonOverride === "Manual" ? closeManualReason : null,
+                                            manualDescription:
+                                                closeReasonOverride === "Manual" && closeManualReason === "Other"
+                                                    ? closeManualDescription.trim()
+                                                    : null,
                                         });
                                         setIsClosing(false);
                                     } catch (err) {
@@ -689,7 +784,7 @@ export default function App() {
         return res.json();
     }
 
-    async function closeTradeInline(trade, { exitPrice, closedAtLocal, closeReasonOverride }) {
+    async function closeTradeInline(trade, { exitPrice, closedAtLocal, closeReasonOverride, manualReason, manualDescription }) {
         const closedAtIso = toIsoFromLocal(closedAtLocal);
         if (!closedAtIso) {
             throw new Error("Closed time is required.");
@@ -703,10 +798,23 @@ export default function App() {
             throw new Error("Entry Price is required to close a trade.");
         }
 
+        if (closeReasonOverride === "Manual") {
+            if (!manualReason) {
+                throw new Error("Manual Reason is required when Close Reason is Manual.");
+            }
+            if (manualReason === "Other" && !manualDescription) {
+                throw new Error("Description is required when Manual Reason is Other.");
+            }
+        }
+
         const createdAtIso = toIsoString(trade.createdAt);
         if (!createdAtIso) {
             throw new Error("Created time is required to close a trade.");
         }
+
+        const manualReasonToSend = closeReasonOverride === "Manual" ? manualReason : null;
+        const manualDescriptionToSend =
+            closeReasonOverride === "Manual" && manualReason === "Other" ? manualDescription : null;
 
         const payload = {
             symbol: trade.symbol,
@@ -714,6 +822,8 @@ export default function App() {
             entryPrice: entryPriceNumber,
             exitPrice,
             closeReasonOverride,
+            manualReason: manualReasonToSend,
+            manualDescription: manualDescriptionToSend,
             stopLossPrice: trade.stopLossPrice ?? null,
             takeProfitPrice: trade.takeProfitPrice ?? null,
             createdAt: createdAtIso,
