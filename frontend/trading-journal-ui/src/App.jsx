@@ -32,10 +32,13 @@ function TradeDetailsPanelLeft({ trade, open, onClose, formatDate, formatDuratio
 
     if (!open || !trade) return null;
 
+    const emDash = "\u2014";
     const detailRows = [
+        { label: "Status", value: trade.closedAt ? "CLOSED" : "OPEN" },
         { label: "Entry", value: trade.entryPrice ?? "-" },
+        { label: "Exit", value: trade.exitPrice ?? emDash },
         { label: "SL", value: trade.stopLossPrice ?? "-" },
-        { label: "TP", value: trade.takeProfitPrice ?? "—" },
+        { label: "TP", value: trade.takeProfitPrice ?? emDash },
         { label: "SL pips", value: trade.slPips ?? "-" },
         { label: "TP pips", value: trade.tpPips ?? "-" },
         { label: "R/R", value: trade.rrRatio ?? "-" },
@@ -52,16 +55,14 @@ function TradeDetailsPanelLeft({ trade, open, onClose, formatDate, formatDuratio
             <div className="drawer drawer-left" onClick={(e) => e.stopPropagation()}>
                 <div className="drawer-header">
                     <h3 className="drawer-title">
-                        {formatSymbol(trade.symbol)} • {trade.direction}
+                        {formatSymbol(trade.symbol)} {"\u2022"} {trade.direction}
                     </h3>
                     <button
                         type="button"
                         className="btn btn-ghost btn-sm drawer-close"
                         aria-label="Close details panel"
                         onClick={onClose}
-                    >
-                        ×
-                    </button>
+                    >x</button>
                 </div>
                 <div className="drawer-details">
                     {detailRows.map((row) => (
@@ -93,6 +94,7 @@ export default function App() {
     const [editSymbol, setEditSymbol] = useState("");
     const [editDirection, setEditDirection] = useState("LONG");
     const [editEntryPrice, setEditEntryPrice] = useState("");
+    const [editExitPrice, setEditExitPrice] = useState("");
     const [editStopLossPrice, setEditStopLossPrice] = useState("");
     const [editTakeProfitPrice, setEditTakeProfitPrice] = useState("");
     const [editCreatedAt, setEditCreatedAt] = useState("");
@@ -439,6 +441,7 @@ export default function App() {
         setEditSymbol(trade.symbol);
         setEditDirection(trade.direction);
         setEditEntryPrice(trade.entryPrice?.toString() || "");
+        setEditExitPrice(trade.exitPrice?.toString() || "");
         setEditStopLossPrice(trade.stopLossPrice?.toString() || "");
         setEditTakeProfitPrice(trade.takeProfitPrice?.toString() || "");
         setEditCreatedAt(toDateTimeLocalValue(trade.createdAt));
@@ -451,6 +454,7 @@ export default function App() {
         setEditSymbol("");
         setEditDirection("LONG");
         setEditEntryPrice("");
+        setEditExitPrice("");
         setEditStopLossPrice("");
         setEditTakeProfitPrice("");
         setEditCreatedAt("");
@@ -484,12 +488,17 @@ export default function App() {
         }
 
         const entryPriceNumber = Number(editEntryPrice);
+        const exitPriceNumber = editExitPrice === "" ? null : Number(editExitPrice);
         const stopLossNumber = editStopLossPrice === "" ? null : Number(editStopLossPrice);
         const takeProfitNumber = editTakeProfitPrice === "" ? null : Number(editTakeProfitPrice);
         const createdAtIso = toIsoFromLocal(editCreatedAt);
         const closedAtIso = toIsoFromLocal(editClosedAt);
         if (!Number.isFinite(entryPriceNumber) || entryPriceNumber <= 0) {
             setError("Entry must be a positive number.");
+            return;
+        }
+        if (editExitPrice !== "" && (!Number.isFinite(exitPriceNumber) || exitPriceNumber <= 0)) {
+            setError("Exit must be a positive number.");
             return;
         }
         if (!createdAtIso) {
@@ -515,6 +524,7 @@ export default function App() {
                     symbol: editSymbol,
                     direction: editDirection,
                     entryPrice: entryPriceNumber,
+                    exitPrice: exitPriceNumber,
                     stopLossPrice: stopLossNumber,
                     takeProfitPrice: takeProfitNumber,
                     createdAt: createdAtIso,
@@ -1063,12 +1073,9 @@ export default function App() {
                                     <tr>
                                         <th>Symbol</th>
                                         <th>Direction</th>
+                                        <th>Status</th>
                                         <th className="num">Entry</th>
-                                        <th className="num">SL</th>
-                                        <th className="num">TP</th>
-                                        <th className="num">SL pips</th>
-                                        <th className="num">TP pips</th>
-                                        <th className="num">RR</th>
+                                        <th className="num">Exit</th>
                                         <th>Created</th>
                                         <th>Closed</th>
                                         <th>Duration</th>
@@ -1104,9 +1111,6 @@ export default function App() {
                                                     <option value="SHORT">SHORT</option>
                                                 </select>
                                             </th>
-                                            <th />
-                                            <th />
-                                            <th />
                                             <th />
                                             <th />
                                             <th />
@@ -1164,20 +1168,17 @@ export default function App() {
                                     <tbody>
                                     {sortedTrades.length === 0 ? (
                                         <tr>
-                                            <td className="empty" colSpan={13}>No trades yet.</td>
-                                        </tr>
+                                        <td className="empty" colSpan={10}>No trades yet.</td>
+                                    </tr>
                                     ) : (
                                         pagedTrades.map((t) => (
                                             <tr key={t.id} onClick={() => openTradeDetails(t)}>
                                                 <>
                                                     <td>{formatSymbol(t.symbol)}</td>
                                                     <td>{t.direction}</td>
+                                                    <td>{t.closedAt ? "CLOSED" : "OPEN"}</td>
                                                     <td className="num">{t.entryPrice ?? "-"}</td>
-                                                    <td className="num">{t.stopLossPrice ?? "-"}</td>
-                                                    <td className="num">{t.takeProfitPrice ?? "-"}</td>
-                                                    <td className="num">{t.slPips ?? "-"}</td>
-                                                    <td className="num">{t.tpPips ?? "-"}</td>
-                                                    <td className="num">{t.rrRatio ?? "-"}</td>
+                                                    <td className="num">{t.exitPrice ?? "\u2014"}</td>
                                                     <td>{formatDate(t.createdAt)}</td>
                                                     <td>{formatDate(t.closedAt)}</td>
                                                     <td>{formatDuration(t.createdAt, t.closedAt)}</td>
@@ -1303,6 +1304,18 @@ export default function App() {
                                                     />
                                                 </label>
                                                 <label className="field">
+                                                    Exit
+                                                    <input
+                                                        className="input"
+                                                        value={editExitPrice}
+                                                        onChange={(e) => setEditExitPrice(e.target.value)}
+                                                        placeholder="Exit price"
+                                                        type="number"
+                                                        step="0.00001"
+                                                        min="0"
+                                                    />
+                                                </label>
+                                                <label className="field">
                                                     Stop Loss
                                                     <input
                                                         className="input"
@@ -1372,3 +1385,4 @@ export default function App() {
         </div>
     );
 }
+

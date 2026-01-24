@@ -32,14 +32,15 @@ public class TradeServiceImpl implements TradeService {
     }
 
     @Override
-    public Trade create(String symbol, String direction, BigDecimal entryPrice, BigDecimal stopLossPrice, BigDecimal takeProfitPrice, Instant closedAt) {
-        validateTradeInput(symbol, direction, entryPrice, stopLossPrice, takeProfitPrice);
+    public Trade create(String symbol, String direction, BigDecimal entryPrice, BigDecimal exitPrice, BigDecimal stopLossPrice, BigDecimal takeProfitPrice, Instant closedAt) {
+        validateTradeInput(symbol, direction, entryPrice, exitPrice, stopLossPrice, takeProfitPrice);
         Metrics metrics = computeMetrics(symbol, direction, entryPrice, stopLossPrice, takeProfitPrice);
 
         Trade t = new Trade();
         t.setSymbol(normalizeSymbol(symbol));
         t.setDirection(direction.toUpperCase());
         t.setEntryPrice(entryPrice);
+        t.setExitPrice(exitPrice);
         t.setStopLossPrice(stopLossPrice);
         t.setTakeProfitPrice(takeProfitPrice);
         t.setSlPips(metrics.slPips());
@@ -71,8 +72,8 @@ public class TradeServiceImpl implements TradeService {
     }
 
     @Override
-    public Trade update(Long id, String symbol, String direction, BigDecimal entryPrice, BigDecimal stopLossPrice, BigDecimal takeProfitPrice, Instant closedAt, Instant createdAt) {
-        validateTradeInput(symbol, direction, entryPrice, stopLossPrice, takeProfitPrice);
+    public Trade update(Long id, String symbol, String direction, BigDecimal entryPrice, BigDecimal exitPrice, BigDecimal stopLossPrice, BigDecimal takeProfitPrice, Instant closedAt, Instant createdAt) {
+        validateTradeInput(symbol, direction, entryPrice, exitPrice, stopLossPrice, takeProfitPrice);
         Metrics metrics = computeMetrics(symbol, direction, entryPrice, stopLossPrice, takeProfitPrice);
 
         Trade t = findOwnedTrade(id);
@@ -83,6 +84,7 @@ public class TradeServiceImpl implements TradeService {
         t.setSymbol(normalizeSymbol(symbol));
         t.setDirection(direction.toUpperCase());
         t.setEntryPrice(entryPrice);
+        t.setExitPrice(exitPrice);
         t.setStopLossPrice(stopLossPrice);
         t.setTakeProfitPrice(takeProfitPrice);
         t.setSlPips(metrics.slPips());
@@ -106,7 +108,7 @@ public class TradeServiceImpl implements TradeService {
         return trades.findAll();
     }
 
-    private void validateTradeInput(String symbol, String direction, BigDecimal entryPrice, BigDecimal stopLossPrice, BigDecimal takeProfitPrice) {
+    private void validateTradeInput(String symbol, String direction, BigDecimal entryPrice, BigDecimal exitPrice, BigDecimal stopLossPrice, BigDecimal takeProfitPrice) {
         if (symbol == null || symbol.trim().isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Symbol is required");
         }
@@ -118,6 +120,9 @@ public class TradeServiceImpl implements TradeService {
         }
         if (entryPrice == null || entryPrice.signum() <= 0) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Entry price must be positive");
+        }
+        if (exitPrice != null && exitPrice.signum() <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Exit price must be positive");
         }
         if (stopLossPrice != null && stopLossPrice.signum() <= 0) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Stop loss price must be positive");
