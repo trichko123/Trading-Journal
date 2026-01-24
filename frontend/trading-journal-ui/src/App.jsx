@@ -112,6 +112,7 @@ export default function App() {
     const [filters, setFilters] = useState({
         symbol: "all",
         direction: "all",
+        status: "all",
         session: "all",
     });
     const [datePreset, setDatePreset] = useState("all");
@@ -682,6 +683,11 @@ export default function App() {
             if (filters.direction !== "all" && trade.direction !== filters.direction) {
                 return false;
             }
+            if (filters.status !== "all") {
+                const isClosed = Boolean(trade.closedAt);
+                if (filters.status === "open" && isClosed) return false;
+                if (filters.status === "closed" && !isClosed) return false;
+            }
             if (filters.session !== "all") {
                 const label = getSessionLabel(trade.createdAt);
                 if (label !== filters.session) return false;
@@ -754,7 +760,7 @@ export default function App() {
     }
 
     function clearFilters() {
-        setFilters({ symbol: "all", direction: "all", session: "all" });
+        setFilters({ symbol: "all", direction: "all", status: "all", session: "all" });
         setDatePreset("all");
         setFromDate("");
         setToDate("");
@@ -1110,7 +1116,18 @@ export default function App() {
                                                     <option value="SHORT">SHORT</option>
                                                 </select>
                                             </th>
-                                            <th />
+                                            <th>
+                                                <select
+                                                    className="input filter-input"
+                                                    value={filters.status}
+                                                    onChange={(e) => setFilters((prev) => ({ ...prev, status: e.target.value }))}
+                                                    aria-label="Filter by status"
+                                                >
+                                                    <option value="all">All</option>
+                                                    <option value="open">Open</option>
+                                                    <option value="closed">Closed</option>
+                                                </select>
+                                            </th>
                                             <th />
                                             <th />
                                             <th>
