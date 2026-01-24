@@ -18,7 +18,15 @@ const CURRENCY_PAIRS = [
 
 const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 
-function TradeDetailsPanelLeft({ trade, open, onClose, formatDate, formatDuration, formatSymbol, getSessionLabel }) {
+function TradeDetailsPanelLeft({
+    trade,
+    open,
+    onClose,
+    formatDate,
+    formatDuration,
+    formatSymbol,
+    getSessionLabel,
+}) {
     useEffect(() => {
         if (!open) return undefined;
         const handleKeydown = (event) => {
@@ -33,6 +41,21 @@ function TradeDetailsPanelLeft({ trade, open, onClose, formatDate, formatDuratio
     if (!open || !trade) return null;
 
     const emDash = "\u2014";
+    const tolerance = 0.0001;
+    const approxEqual = (a, b) => Math.abs(a - b) <= tolerance;
+    const getCloseReason = (t) => {
+        if (!t?.closedAt || t.exitPrice == null) return emDash;
+        const exitPrice = Number(t.exitPrice);
+        if (!Number.isFinite(exitPrice)) return emDash;
+        const tp = t.takeProfitPrice == null ? null : Number(t.takeProfitPrice);
+        const sl = t.stopLossPrice == null ? null : Number(t.stopLossPrice);
+        const entry = t.entryPrice == null ? null : Number(t.entryPrice);
+
+        if (tp != null && Number.isFinite(tp) && approxEqual(exitPrice, tp)) return "TP";
+        if (sl != null && Number.isFinite(sl) && approxEqual(exitPrice, sl)) return "SL";
+        if (entry != null && Number.isFinite(entry) && approxEqual(exitPrice, entry)) return "BreakEven";
+        return "Manual";
+    };
     const detailRows = [
         { label: "Status", value: trade.closedAt ? "CLOSED" : "OPEN" },
         { label: "Entry", value: trade.entryPrice ?? "-" },
@@ -43,6 +66,7 @@ function TradeDetailsPanelLeft({ trade, open, onClose, formatDate, formatDuratio
         { label: "TP pips", value: trade.tpPips ?? "-" },
         { label: "R/R", value: trade.rrRatio ?? "-" },
         { label: "Session", value: getSessionLabel(trade.createdAt) ?? emDash },
+        { label: "Close Reason", value: getCloseReason(trade) },
         { label: "Created", value: formatDate(trade.createdAt) },
         {
             label: "Duration",
@@ -136,6 +160,28 @@ export default function App() {
         "Asian / London",
         "New York / Asian",
     ];
+
+    function formatOutcome(trade) {
+        const emDash = "\u2014";
+        if (!trade?.closedAt) return emDash;
+        if (trade.exitPrice == null) return emDash;
+        if (trade.stopLossPrice == null) return emDash;
+        const entry = Number(trade.entryPrice);
+        const exit = Number(trade.exitPrice);
+        const stopLoss = Number(trade.stopLossPrice);
+        if (!Number.isFinite(entry) || !Number.isFinite(exit) || !Number.isFinite(stopLoss)) return emDash;
+
+        const direction = trade.direction?.toUpperCase();
+        const risk = direction === "SHORT" ? (stopLoss - entry) : (entry - stopLoss);
+        if (!Number.isFinite(risk) || risk <= 0) return emDash;
+
+        const reward = direction === "SHORT" ? (entry - exit) : (exit - entry);
+        const rValue = reward / risk;
+        if (!Number.isFinite(rValue)) return emDash;
+
+        const sign = rValue > 0 ? "+" : "";
+        return `${sign}${rValue.toFixed(2)}R`;
+    }
 
     function normalizeEmail(value) {
         return value.trim().toLowerCase();
@@ -1083,6 +1129,7 @@ export default function App() {
                                         <th>Status</th>
                                         <th className="num">Entry</th>
                                         <th className="num">Exit</th>
+                                        <th className="num">Outcome</th>
                                         <th>Created</th>
                                         <th>Closed</th>
                                         <th className="actions">Actions</th>
@@ -1130,6 +1177,7 @@ export default function App() {
                                             </th>
                                             <th />
                                             <th />
+                                            <th />
                                             <th>
                                                 <select
                                                     className="input filter-input"
@@ -1168,7 +1216,7 @@ export default function App() {
                                     <tbody>
                                     {sortedTrades.length === 0 ? (
                                         <tr>
-                                        <td className="empty" colSpan={8}>No trades yet.</td>
+                                        <td className="empty" colSpan={9}>No trades yet.</td>
                                     </tr>
                                     ) : (
                                         pagedTrades.map((t) => (
@@ -1179,6 +1227,7 @@ export default function App() {
                                                     <td>{t.closedAt ? "CLOSED" : "OPEN"}</td>
                                                     <td className="num">{t.entryPrice ?? "-"}</td>
                                                     <td className="num">{t.exitPrice ?? "\u2014"}</td>
+                                                    <td className="num">{formatOutcome(t)}</td>
                                                     <td>{formatDate(t.createdAt)}</td>
                                                     <td>{formatDate(t.closedAt)}</td>
                                                     <td className="actions">
