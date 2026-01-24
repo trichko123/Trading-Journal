@@ -18,6 +18,64 @@ const CURRENCY_PAIRS = [
 
 const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 
+function TradeDetailsPanelLeft({ trade, open, onClose, formatDate, formatDuration, formatSymbol }) {
+    useEffect(() => {
+        if (!open) return undefined;
+        const handleKeydown = (event) => {
+            if (event.key === "Escape") {
+                onClose();
+            }
+        };
+        window.addEventListener("keydown", handleKeydown);
+        return () => window.removeEventListener("keydown", handleKeydown);
+    }, [open, onClose]);
+
+    if (!open || !trade) return null;
+
+    const detailRows = [
+        { label: "Entry", value: trade.entryPrice ?? "-" },
+        { label: "SL", value: trade.stopLossPrice ?? "-" },
+        { label: "TP", value: trade.takeProfitPrice ?? "—" },
+        { label: "SL pips", value: trade.slPips ?? "-" },
+        { label: "TP pips", value: trade.tpPips ?? "-" },
+        { label: "R/R", value: trade.rrRatio ?? "-" },
+        { label: "Created", value: formatDate(trade.createdAt) },
+        {
+            label: "Duration",
+            value: trade.duration ?? formatDuration(trade.createdAt, trade.closedAt),
+        },
+    ];
+
+    return (
+        <>
+            <div className="drawer-backdrop" onClick={onClose} />
+            <div className="drawer drawer-left" onClick={(e) => e.stopPropagation()}>
+                <div className="drawer-header">
+                    <h3 className="drawer-title">
+                        {formatSymbol(trade.symbol)} • {trade.direction}
+                    </h3>
+                    <button
+                        type="button"
+                        className="btn btn-ghost btn-sm drawer-close"
+                        aria-label="Close details panel"
+                        onClick={onClose}
+                    >
+                        ×
+                    </button>
+                </div>
+                <div className="drawer-details">
+                    {detailRows.map((row) => (
+                        <div key={row.label} className="drawer-detail-row">
+                            <span className="drawer-detail-label">{row.label}</span>
+                            <span className="drawer-detail-value">{row.value}</span>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        </>
+    );
+}
+
 export default function App() {
     const [email, setEmail] = useState("test@example.com");
     const [password, setPassword] = useState("pass1234");
@@ -41,6 +99,8 @@ export default function App() {
     const [editClosedAt, setEditClosedAt] = useState("");
     const [confirmPassword, setConfirmPassword] = useState("");
     const [isEditOpen, setIsEditOpen] = useState(false);
+    const [selectedTradeForDetails, setSelectedTradeForDetails] = useState(null);
+    const [isDetailsOpen, setIsDetailsOpen] = useState(false);
 
     const [error, setError] = useState("");
     const [isLoading, setIsLoading] = useState(false);
@@ -402,6 +462,16 @@ export default function App() {
         setIsEditOpen(false);
         setEditingId(null);
         setError("");
+    }
+
+    function openTradeDetails(trade) {
+        setSelectedTradeForDetails(trade);
+        setIsDetailsOpen(true);
+    }
+
+    function closeTradeDetails() {
+        setIsDetailsOpen(false);
+        setSelectedTradeForDetails(null);
     }
 
     async function updateTrade(id, e) {
@@ -1098,7 +1168,7 @@ export default function App() {
                                         </tr>
                                     ) : (
                                         pagedTrades.map((t) => (
-                                            <tr key={t.id}>
+                                            <tr key={t.id} onClick={() => openTradeDetails(t)}>
                                                 <>
                                                     <td>{formatSymbol(t.symbol)}</td>
                                                     <td>{t.direction}</td>
@@ -1116,7 +1186,8 @@ export default function App() {
                                                         <div className="actions">
                                                             <button
                                                                 className="btn"
-                                                                onClick={() => {
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
                                                                     startEdit(t);
                                                                     setIsEditOpen(true);
                                                                 }}
@@ -1125,7 +1196,10 @@ export default function App() {
                                                             </button>
                                                             <button
                                                                 className="btn btn-danger"
-                                                                onClick={() => deleteTrade(t.id)}
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    deleteTrade(t.id);
+                                                                }}
                                                             >
                                                                 Delete
                                                             </button>
@@ -1283,6 +1357,14 @@ export default function App() {
                                     </div>
                                 </>
                             )}
+                            <TradeDetailsPanelLeft
+                                trade={selectedTradeForDetails}
+                                open={isDetailsOpen}
+                                onClose={closeTradeDetails}
+                                formatDate={formatDate}
+                                formatDuration={formatDuration}
+                                formatSymbol={formatSymbol}
+                            />
                         </div>
                     </>
                 )}
