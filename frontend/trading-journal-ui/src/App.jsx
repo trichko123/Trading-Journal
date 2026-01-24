@@ -45,7 +45,7 @@ function TradeDetailsPanelLeft({ trade, open, onClose, formatDate, formatDuratio
         { label: "Created", value: formatDate(trade.createdAt) },
         {
             label: "Duration",
-            value: trade.duration ?? formatDuration(trade.createdAt, trade.closedAt),
+            value: trade.duration ?? formatDuration(trade.createdAt, trade.closedAt) ?? emDash,
         },
     ];
 
@@ -1078,7 +1078,6 @@ export default function App() {
                                         <th className="num">Exit</th>
                                         <th>Created</th>
                                         <th>Closed</th>
-                                        <th>Duration</th>
                                         <th>Session</th>
                                         <th className="actions">Actions</th>
                                     </tr>
@@ -1144,7 +1143,6 @@ export default function App() {
                                                     <option value="custom">Custom range</option>
                                                 </select>
                                             </th>
-                                            <th />
                                             <th>
                                                 <select
                                                     className="input filter-input"
@@ -1168,7 +1166,7 @@ export default function App() {
                                     <tbody>
                                     {sortedTrades.length === 0 ? (
                                         <tr>
-                                        <td className="empty" colSpan={10}>No trades yet.</td>
+                                        <td className="empty" colSpan={9}>No trades yet.</td>
                                     </tr>
                                     ) : (
                                         pagedTrades.map((t) => (
@@ -1181,7 +1179,6 @@ export default function App() {
                                                     <td className="num">{t.exitPrice ?? "\u2014"}</td>
                                                     <td>{formatDate(t.createdAt)}</td>
                                                     <td>{formatDate(t.closedAt)}</td>
-                                                    <td>{formatDuration(t.createdAt, t.closedAt)}</td>
                                                     <td>{getSessionLabel(t.createdAt)}</td>
                                                     <td className="actions">
                                                         <div className="actions">
