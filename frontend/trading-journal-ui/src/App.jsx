@@ -295,6 +295,7 @@ function TradeDetailsPanelLeft({
                             <h4 className="drawer-section-title">Time</h4>
                             <div className="drawer-section-body">
                                 <DetailRow label="Created" value={formatDate(activeTrade.createdAt)} />
+                                <DetailRow label="Closed" value={formatDate(activeTrade.closedAt)} />
                                 <DetailRow
                                     label="Duration"
                                     value={activeTrade.duration ?? formatDuration(activeTrade.createdAt, activeTrade.closedAt)}
