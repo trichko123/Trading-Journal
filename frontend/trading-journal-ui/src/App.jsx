@@ -1213,7 +1213,10 @@ export default function App() {
                                                                 className="btn btn-danger"
                                                                 onClick={(e) => {
                                                                     e.stopPropagation();
-                                                                    deleteTrade(t.id);
+                                                                    const confirmed = window.confirm("Delete this trade? This action cannot be undone.");
+                                                                    if (confirmed) {
+                                                                        deleteTrade(t.id);
+                                                                    }
                                                                 }}
                                                             >
                                                                 Delete
