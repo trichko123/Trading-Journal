@@ -26,7 +26,23 @@ function TradeDetailsPanelLeft({
     formatDuration,
     formatSymbol,
     getSessionLabel,
+    onCloseTrade,
+    toDateTimeLocalValue,
 }) {
+    const [isClosing, setIsClosing] = useState(false);
+    const [closeExitPrice, setCloseExitPrice] = useState("");
+    const [closeClosedAt, setCloseClosedAt] = useState("");
+    const [closeReasonOverride, setCloseReasonOverride] = useState("");
+    const [closeManualReason, setCloseManualReason] = useState("");
+    const [closeManualDescription, setCloseManualDescription] = useState("");
+    const [closeError, setCloseError] = useState("");
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const safeToDateTimeLocalValue = useMemo(() => {
+        if (typeof toDateTimeLocalValue === "function") {
+            return toDateTimeLocalValue;
+        }
+        return () => "";
+    }, [toDateTimeLocalValue]);
     useEffect(() => {
         if (!open) return undefined;
         const handleKeydown = (event) => {
@@ -38,24 +54,64 @@ function TradeDetailsPanelLeft({
         return () => window.removeEventListener("keydown", handleKeydown);
     }, [open, onClose]);
 
-    if (!open || !trade) return null;
-
     const emDash = "\u2014";
-    const tolerance = 0.0001;
-    const approxEqual = (a, b) => Math.abs(a - b) <= tolerance;
+    const getPipSizeForSymbol = (symbol) => (
+        symbol?.toUpperCase().includes("JPY") ? 0.01 : 0.0001
+    );
+    const deriveCloseReasonForPrices = ({ symbol, exitPrice, takeProfitPrice, stopLossPrice, entryPrice }) => {
+        const exit = Number(exitPrice);
+        if (!Number.isFinite(exit)) return "";
+        const pipSize = getPipSizeForSymbol(symbol);
+        const tpTolerance = 2 * pipSize;
+        const breakevenTolerance = 3 * pipSize;
+        const tp = takeProfitPrice == null ? null : Number(takeProfitPrice);
+        const sl = stopLossPrice == null ? null : Number(stopLossPrice);
+        const entry = entryPrice == null ? null : Number(entryPrice);
+
+        if (tp != null && Number.isFinite(tp) && Math.abs(exit - tp) <= tpTolerance) return "TP";
+        if (sl != null && Number.isFinite(sl) && Math.abs(exit - sl) <= tpTolerance) return "SL";
+        if (entry != null && Number.isFinite(entry) && Math.abs(exit - entry) <= breakevenTolerance) return "BreakEven";
+        return "Manual";
+    };
     const getCloseReason = (t) => {
         if (!t?.closedAt || t.exitPrice == null) return emDash;
         const exitPrice = Number(t.exitPrice);
         if (!Number.isFinite(exitPrice)) return emDash;
-        const tp = t.takeProfitPrice == null ? null : Number(t.takeProfitPrice);
-        const sl = t.stopLossPrice == null ? null : Number(t.stopLossPrice);
-        const entry = t.entryPrice == null ? null : Number(t.entryPrice);
-
-        if (tp != null && Number.isFinite(tp) && approxEqual(exitPrice, tp)) return "TP";
-        if (sl != null && Number.isFinite(sl) && approxEqual(exitPrice, sl)) return "SL";
-        if (entry != null && Number.isFinite(entry) && approxEqual(exitPrice, entry)) return "BreakEven";
-        return "Manual";
+        const derived = deriveCloseReasonForPrices({
+            symbol: t.symbol,
+            exitPrice,
+            takeProfitPrice: t.takeProfitPrice,
+            stopLossPrice: t.stopLossPrice,
+            entryPrice: t.entryPrice,
+        });
+        if (t.closeReasonOverride) return t.closeReasonOverride;
+        return derived || emDash;
     };
+    const deriveCloseReasonFromExit = (exitPriceValue) => {
+        const exitPrice = Number(exitPriceValue);
+        if (!Number.isFinite(exitPrice)) return "";
+        return deriveCloseReasonForPrices({
+            symbol: trade?.symbol,
+            exitPrice,
+            takeProfitPrice: trade?.takeProfitPrice,
+            stopLossPrice: trade?.stopLossPrice,
+            entryPrice: trade?.entryPrice,
+        });
+    };
+    useEffect(() => {
+        if (!open || !trade) return;
+        setIsClosing(false);
+        setCloseError("");
+        setCloseExitPrice("");
+        setCloseReasonOverride(trade.closeReasonOverride ?? "");
+        setCloseManualReason(trade.manualReason ?? "");
+        setCloseManualDescription(trade.manualDescription ?? "");
+        setCloseClosedAt(safeToDateTimeLocalValue(new Date()));
+    }, [open, trade?.id, safeToDateTimeLocalValue]);
+
+    if (!open || !trade) return null;
+
+    const closeReasonValue = getCloseReason(trade);
     const detailRows = [
         { label: "Status", value: trade.closedAt ? "CLOSED" : "OPEN" },
         { label: "Entry", value: trade.entryPrice ?? "-" },
@@ -66,13 +122,29 @@ function TradeDetailsPanelLeft({
         { label: "TP pips", value: trade.tpPips ?? "-" },
         { label: "R/R", value: trade.rrRatio ?? "-" },
         { label: "Session", value: getSessionLabel(trade.createdAt) ?? emDash },
-        { label: "Close Reason", value: getCloseReason(trade) },
+        { label: "Close Reason", value: closeReasonValue },
         { label: "Created", value: formatDate(trade.createdAt) },
         {
             label: "Duration",
             value: trade.duration ?? formatDuration(trade.createdAt, trade.closedAt) ?? emDash,
         },
     ];
+    if (closeReasonValue === "Manual") {
+        const insertIndex = Math.max(
+            0,
+            detailRows.findIndex((row) => row.label === "Close Reason") + 1
+        );
+        detailRows.splice(insertIndex, 0, {
+            label: "Manual Reason",
+            value: trade.manualReason ?? emDash,
+        });
+        if (trade.manualReason === "Other" && trade.manualDescription) {
+            detailRows.splice(insertIndex + 1, 0, {
+                label: "Description",
+                value: trade.manualDescription,
+            });
+        }
+    }
 
     return (
         <>
@@ -97,6 +169,174 @@ function TradeDetailsPanelLeft({
                         </div>
                     ))}
                 </div>
+                {!trade.closedAt && !isClosing && (
+                    <div className="drawer-actions">
+                        <button
+                            type="button"
+                            className="btn btn-primary"
+                            onClick={() => {
+                                setCloseClosedAt(safeToDateTimeLocalValue(new Date()));
+                                setCloseExitPrice("");
+                                setCloseReasonOverride("");
+                                setCloseError("");
+                                setIsClosing(true);
+                            }}
+                        >
+                            Close trade
+                        </button>
+                    </div>
+                )}
+                {!trade.closedAt && isClosing && (
+                    <div>
+                        {closeError && <div className="banner error">{closeError}</div>}
+                        <div className="drawer-grid">
+                            <label className="field">
+                                Exit Price
+                                <input
+                                    className="input"
+                                    value={closeExitPrice}
+                                    onChange={(e) => {
+                                        const nextValue = e.target.value;
+                                        setCloseExitPrice(nextValue);
+                                        const nextReason = deriveCloseReasonFromExit(nextValue);
+                                        if (nextReason) {
+                                            setCloseReasonOverride(nextReason);
+                                            if (nextReason !== "Manual") {
+                                                setCloseManualReason("");
+                                                setCloseManualDescription("");
+                                            }
+                                        }
+                                    }}
+                                    placeholder="Exit price"
+                                    type="number"
+                                    step="0.00001"
+                                    min="0"
+                                />
+                            </label>
+                            <label className="field">
+                                Closed Time
+                                <input
+                                    className="input"
+                                    value={closeClosedAt}
+                                    onChange={(e) => setCloseClosedAt(e.target.value)}
+                                    type="datetime-local"
+                                />
+                            </label>
+                            <label className="field">
+                                Close Reason
+                                <select
+                                    className="input"
+                                    value={closeReasonOverride}
+                                    onChange={(e) => {
+                                        const nextReason = e.target.value;
+                                        setCloseReasonOverride(nextReason);
+                                        if (nextReason !== "Manual") {
+                                            setCloseManualReason("");
+                                            setCloseManualDescription("");
+                                        }
+                                    }}
+                                >
+                                    <option value="">None</option>
+                                    <option value="TP">TP</option>
+                                    <option value="SL">SL</option>
+                                    <option value="BreakEven">BreakEven</option>
+                                    <option value="Manual">Manual</option>
+                                </select>
+                            </label>
+                            {closeReasonOverride === "Manual" && (
+                                <label className="field">
+                                    Manual Reason
+                                    <select
+                                        className="input"
+                                        value={closeManualReason}
+                                        onChange={(e) => {
+                                            const nextReason = e.target.value;
+                                            setCloseManualReason(nextReason);
+                                            if (nextReason !== "Other") {
+                                                setCloseManualDescription("");
+                                            }
+                                        }}
+                                    >
+                                        <option value="">Select reason</option>
+                                        <option value="News release">News release</option>
+                                        <option value="Market Friday closing">Market Friday closing</option>
+                                        <option value="Other">Other</option>
+                                    </select>
+                                </label>
+                            )}
+                            {closeReasonOverride === "Manual" && closeManualReason === "Other" && (
+                                <label className="field">
+                                    Description
+                                    <textarea
+                                        className="input"
+                                        value={closeManualDescription}
+                                        onChange={(e) => setCloseManualDescription(e.target.value)}
+                                        placeholder="Describe the reason"
+                                        rows={3}
+                                    />
+                                </label>
+                            )}
+                        </div>
+                        <div className="drawer-actions">
+                            <button
+                                type="button"
+                                className="btn"
+                                onClick={() => {
+                                    setIsClosing(false);
+                                    setCloseError("");
+                                }}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                className="btn btn-primary"
+                                disabled={isSubmitting}
+                                onClick={async () => {
+                                    const exitPriceNumber = Number(closeExitPrice);
+                                    if (!Number.isFinite(exitPriceNumber) || exitPriceNumber <= 0) {
+                                        setCloseError("Exit Price must be a positive number.");
+                                        return;
+                                    }
+                                    if (closeReasonOverride === "Manual") {
+                                        if (!closeManualReason) {
+                                            setCloseError("Manual Reason is required when Close Reason is Manual.");
+                                            return;
+                                        }
+                                        if (closeManualReason === "Other" && !closeManualDescription.trim()) {
+                                            setCloseError("Description is required when Manual Reason is Other.");
+                                            return;
+                                        }
+                                    }
+                                    setCloseError("");
+                                    setIsSubmitting(true);
+                                    try {
+                                        if (typeof onCloseTrade !== "function") {
+                                            throw new Error("Close trade handler is not available.");
+                                        }
+                                        await onCloseTrade(trade, {
+                                            exitPrice: exitPriceNumber,
+                                            closedAtLocal: closeClosedAt,
+                                            closeReasonOverride: closeReasonOverride || null,
+                                            manualReason: closeReasonOverride === "Manual" ? closeManualReason : null,
+                                            manualDescription:
+                                                closeReasonOverride === "Manual" && closeManualReason === "Other"
+                                                    ? closeManualDescription.trim()
+                                                    : null,
+                                        });
+                                        setIsClosing(false);
+                                    } catch (err) {
+                                        setCloseError(String(err).replace(/^Error:\s*/, ""));
+                                    } finally {
+                                        setIsSubmitting(false);
+                                    }
+                                }}
+                            >
+                                Confirm
+                            </button>
+                        </div>
+                    </div>
+                )}
             </div>
         </>
     );
@@ -421,7 +661,7 @@ export default function App() {
         const end = parseCreatedAt(endValue);
         if (!start || !end) return "-";
         const diffMs = end.getTime() - start.getTime();
-        if (diffMs <= 0) return "-";
+        if (diffMs < 0) return "-";
         const totalMinutes = Math.floor(diffMs / 60000);
         const days = Math.floor(totalMinutes / 1440);
         const hours = Math.floor((totalMinutes % 1440) / 60);
@@ -526,6 +766,76 @@ export default function App() {
         setSelectedTradeForDetails(null);
     }
 
+    async function updateTradeRequest(id, payload) {
+        const res = await fetch(`${API}/trades/${id}`, {
+            method: "PUT",
+            headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify(payload),
+        });
+
+        if (!res.ok) {
+            const txt = await res.text();
+            throw new Error(`Update trade failed (${res.status}): ${txt}`);
+        }
+
+        return res.json();
+    }
+
+    async function closeTradeInline(trade, { exitPrice, closedAtLocal, closeReasonOverride, manualReason, manualDescription }) {
+        const closedAtIso = toIsoFromLocal(closedAtLocal);
+        if (!closedAtIso) {
+            throw new Error("Closed time is required.");
+        }
+        if (!Number.isFinite(exitPrice) || exitPrice <= 0) {
+            throw new Error("Exit Price must be a positive number.");
+        }
+
+        const entryPriceNumber = Number(trade.entryPrice);
+        if (!Number.isFinite(entryPriceNumber) || entryPriceNumber <= 0) {
+            throw new Error("Entry Price is required to close a trade.");
+        }
+
+        if (closeReasonOverride === "Manual") {
+            if (!manualReason) {
+                throw new Error("Manual Reason is required when Close Reason is Manual.");
+            }
+            if (manualReason === "Other" && !manualDescription) {
+                throw new Error("Description is required when Manual Reason is Other.");
+            }
+        }
+
+        const createdAtIso = toIsoString(trade.createdAt);
+        if (!createdAtIso) {
+            throw new Error("Created time is required to close a trade.");
+        }
+
+        const manualReasonToSend = closeReasonOverride === "Manual" ? manualReason : null;
+        const manualDescriptionToSend =
+            closeReasonOverride === "Manual" && manualReason === "Other" ? manualDescription : null;
+
+        const payload = {
+            symbol: trade.symbol,
+            direction: trade.direction,
+            entryPrice: entryPriceNumber,
+            exitPrice,
+            closeReasonOverride,
+            manualReason: manualReasonToSend,
+            manualDescription: manualDescriptionToSend,
+            stopLossPrice: trade.stopLossPrice ?? null,
+            takeProfitPrice: trade.takeProfitPrice ?? null,
+            createdAt: createdAtIso,
+            closedAt: closedAtIso,
+        };
+
+        const updated = await updateTradeRequest(trade.id, payload);
+        setSelectedTradeForDetails(updated);
+        await loadTrades({ force: true });
+        return updated;
+    }
+
     async function updateTrade(id, e) {
         e.preventDefault();
         setError("");
@@ -549,6 +859,10 @@ export default function App() {
             setError("Exit must be a positive number.");
             return;
         }
+        if (closedAtIso && (exitPriceNumber == null || exitPriceNumber <= 0)) {
+            setError("Exit must be provided when closing a trade.");
+            return;
+        }
         if (!createdAtIso) {
             setError("Created time is required.");
             return;
@@ -562,29 +876,16 @@ export default function App() {
         }
 
         try {
-            const res = await fetch(`${API}/trades/${id}`, {
-                method: "PUT",
-                headers: {
-                    "Content-Type": "application/json",
-                    Authorization: `Bearer ${token}`,
-                },
-                body: JSON.stringify({
-                    symbol: editSymbol,
-                    direction: editDirection,
-                    entryPrice: entryPriceNumber,
-                    exitPrice: exitPriceNumber,
-                    stopLossPrice: stopLossNumber,
-                    takeProfitPrice: takeProfitNumber,
-                    createdAt: createdAtIso,
-                    closedAt: closedAtIso,
-                }),
+            await updateTradeRequest(id, {
+                symbol: editSymbol,
+                direction: editDirection,
+                entryPrice: entryPriceNumber,
+                exitPrice: exitPriceNumber,
+                stopLossPrice: stopLossNumber,
+                takeProfitPrice: takeProfitNumber,
+                createdAt: createdAtIso,
+                closedAt: closedAtIso,
             });
-
-            if (!res.ok) {
-                const txt = await res.text();
-                throw new Error(`Update trade failed (${res.status}): ${txt}`);
-            }
-
             setIsEditOpen(false);
             setEditingId(null);
             await loadTrades({ force: true });
@@ -1428,6 +1729,8 @@ export default function App() {
                                 formatDuration={formatDuration}
                                 formatSymbol={formatSymbol}
                                 getSessionLabel={getSessionLabel}
+                                onCloseTrade={closeTradeInline}
+                                toDateTimeLocalValue={toDateTimeLocalValue}
                             />
                         </div>
                     </>

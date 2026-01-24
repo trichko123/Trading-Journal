@@ -32,15 +32,21 @@ public class TradeServiceImpl implements TradeService {
     }
 
     @Override
-    public Trade create(String symbol, String direction, BigDecimal entryPrice, BigDecimal exitPrice, BigDecimal stopLossPrice, BigDecimal takeProfitPrice, Instant closedAt) {
+    public Trade create(String symbol, String direction, BigDecimal entryPrice, BigDecimal exitPrice, String closeReasonOverride, String manualReason, String manualDescription, BigDecimal stopLossPrice, BigDecimal takeProfitPrice, Instant closedAt) {
         validateTradeInput(symbol, direction, entryPrice, exitPrice, stopLossPrice, takeProfitPrice);
+        validateClosedTrade(exitPrice, closedAt);
         Metrics metrics = computeMetrics(symbol, direction, entryPrice, stopLossPrice, takeProfitPrice);
+        String normalizedCloseReason = normalizeCloseReason(closeReasonOverride);
+        ManualDetails manualDetails = normalizeManualDetails(normalizedCloseReason, manualReason, manualDescription);
 
         Trade t = new Trade();
         t.setSymbol(normalizeSymbol(symbol));
         t.setDirection(direction.toUpperCase());
         t.setEntryPrice(entryPrice);
         t.setExitPrice(exitPrice);
+        t.setCloseReasonOverride(normalizedCloseReason);
+        t.setManualReason(manualDetails.manualReason());
+        t.setManualDescription(manualDetails.manualDescription());
         t.setStopLossPrice(stopLossPrice);
         t.setTakeProfitPrice(takeProfitPrice);
         t.setSlPips(metrics.slPips());
@@ -72,8 +78,9 @@ public class TradeServiceImpl implements TradeService {
     }
 
     @Override
-    public Trade update(Long id, String symbol, String direction, BigDecimal entryPrice, BigDecimal exitPrice, BigDecimal stopLossPrice, BigDecimal takeProfitPrice, Instant closedAt, Instant createdAt) {
+    public Trade update(Long id, String symbol, String direction, BigDecimal entryPrice, BigDecimal exitPrice, String closeReasonOverride, String manualReason, String manualDescription, BigDecimal stopLossPrice, BigDecimal takeProfitPrice, Instant closedAt, Instant createdAt) {
         validateTradeInput(symbol, direction, entryPrice, exitPrice, stopLossPrice, takeProfitPrice);
+        validateClosedTrade(exitPrice, closedAt);
         Metrics metrics = computeMetrics(symbol, direction, entryPrice, stopLossPrice, takeProfitPrice);
 
         Trade t = findOwnedTrade(id);
@@ -85,6 +92,19 @@ public class TradeServiceImpl implements TradeService {
         t.setDirection(direction.toUpperCase());
         t.setEntryPrice(entryPrice);
         t.setExitPrice(exitPrice);
+        String normalizedCloseReason = null;
+        if (closeReasonOverride != null) {
+            normalizedCloseReason = normalizeCloseReason(closeReasonOverride);
+            t.setCloseReasonOverride(normalizedCloseReason);
+        }
+        if (closeReasonOverride != null || manualReason != null || manualDescription != null) {
+            if (closeReasonOverride == null) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Close reason is required when manual details are provided");
+            }
+            ManualDetails manualDetails = normalizeManualDetails(normalizedCloseReason, manualReason, manualDescription);
+            t.setManualReason(manualDetails.manualReason());
+            t.setManualDescription(manualDetails.manualDescription());
+        }
         t.setStopLossPrice(stopLossPrice);
         t.setTakeProfitPrice(takeProfitPrice);
         t.setSlPips(metrics.slPips());
@@ -149,6 +169,45 @@ public class TradeServiceImpl implements TradeService {
         if (stopLossPrice != null && takeProfitPrice != null) {
             validateOrdering(direction, entryPrice, stopLossPrice, takeProfitPrice);
         }
+    }
+
+    private void validateClosedTrade(BigDecimal exitPrice, Instant closedAt) {
+        if (closedAt != null) {
+            if (exitPrice == null || exitPrice.signum() <= 0) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Exit price must be positive when closing a trade");
+            }
+        }
+    }
+
+    private String normalizeCloseReason(String closeReasonOverride) {
+        if (closeReasonOverride == null) return null;
+        String trimmed = closeReasonOverride.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private ManualDetails normalizeManualDetails(String closeReasonOverride, String manualReason, String manualDescription) {
+        if (closeReasonOverride == null || !closeReasonOverride.equalsIgnoreCase("MANUAL")) {
+            return ManualDetails.empty();
+        }
+        String normalizedManualReason = normalizeOptionalText(manualReason);
+        if (normalizedManualReason == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Manual reason is required when close reason is Manual");
+        }
+        String normalizedDescription = normalizeOptionalText(manualDescription);
+        if (normalizedManualReason.equalsIgnoreCase("OTHER")) {
+            if (normalizedDescription == null) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Description is required when manual reason is Other");
+            }
+        } else {
+            normalizedDescription = null;
+        }
+        return new ManualDetails(normalizedManualReason, normalizedDescription);
+    }
+
+    private String normalizeOptionalText(String value) {
+        if (value == null) return null;
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     private Trade findOwnedTrade(Long id) {
@@ -228,6 +287,12 @@ public class TradeServiceImpl implements TradeService {
     private record Metrics(BigDecimal slPips, BigDecimal tpPips, BigDecimal rrRatio, BigDecimal pipSizeUsed) {
         static Metrics empty() {
             return new Metrics(null, null, null, null);
+        }
+    }
+
+    private record ManualDetails(String manualReason, String manualDescription) {
+        static ManualDetails empty() {
+            return new ManualDetails(null, null);
         }
     }
 }
