@@ -18,7 +18,7 @@ const CURRENCY_PAIRS = [
 
 const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 
-function TradeDetailsPanelLeft({ trade, open, onClose, formatDate, formatDuration, formatSymbol }) {
+function TradeDetailsPanelLeft({ trade, open, onClose, formatDate, formatDuration, formatSymbol, getSessionLabel }) {
     useEffect(() => {
         if (!open) return undefined;
         const handleKeydown = (event) => {
@@ -42,6 +42,7 @@ function TradeDetailsPanelLeft({ trade, open, onClose, formatDate, formatDuratio
         { label: "SL pips", value: trade.slPips ?? "-" },
         { label: "TP pips", value: trade.tpPips ?? "-" },
         { label: "R/R", value: trade.rrRatio ?? "-" },
+        { label: "Session", value: getSessionLabel(trade.createdAt) ?? emDash },
         { label: "Created", value: formatDate(trade.createdAt) },
         {
             label: "Duration",
@@ -1084,7 +1085,6 @@ export default function App() {
                                         <th className="num">Exit</th>
                                         <th>Created</th>
                                         <th>Closed</th>
-                                        <th>Session</th>
                                         <th className="actions">Actions</th>
                                     </tr>
                                     {showFilters && (
@@ -1160,21 +1160,6 @@ export default function App() {
                                                     <option value="custom">Custom range</option>
                                                 </select>
                                             </th>
-                                            <th>
-                                                <select
-                                                    className="input filter-input"
-                                                    value={filters.session}
-                                                    onChange={(e) => setFilters((prev) => ({ ...prev, session: e.target.value }))}
-                                                    aria-label="Filter by session"
-                                                >
-                                                    <option value="all">All</option>
-                                                    {SESSION_FILTER_OPTIONS.map((option) => (
-                                                        <option key={option} value={option}>
-                                                            {option}
-                                                        </option>
-                                                    ))}
-                                                </select>
-                                            </th>
                                             <th className="actions"></th>
                                         </tr>
                                     )}
@@ -1183,7 +1168,7 @@ export default function App() {
                                     <tbody>
                                     {sortedTrades.length === 0 ? (
                                         <tr>
-                                        <td className="empty" colSpan={9}>No trades yet.</td>
+                                        <td className="empty" colSpan={8}>No trades yet.</td>
                                     </tr>
                                     ) : (
                                         pagedTrades.map((t) => (
@@ -1196,7 +1181,6 @@ export default function App() {
                                                     <td className="num">{t.exitPrice ?? "\u2014"}</td>
                                                     <td>{formatDate(t.createdAt)}</td>
                                                     <td>{formatDate(t.closedAt)}</td>
-                                                    <td>{getSessionLabel(t.createdAt)}</td>
                                                     <td className="actions">
                                                         <div className="actions">
                                                             <button
@@ -1394,6 +1378,7 @@ export default function App() {
                                 formatDate={formatDate}
                                 formatDuration={formatDuration}
                                 formatSymbol={formatSymbol}
+                                getSessionLabel={getSessionLabel}
                             />
                         </div>
                     </>
