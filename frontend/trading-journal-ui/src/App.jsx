@@ -5,6 +5,7 @@ import "./App.css";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080";
 const API = API_BASE.endsWith("/api") ? API_BASE : `${API_BASE}/api`;
+const REFRESH_COOLDOWN_MS = 2000;
 
 // Available currency pairs
 const CURRENCY_PAIRS = [
@@ -44,6 +45,7 @@ export default function App() {
     const [error, setError] = useState("");
     const [isLoading, setIsLoading] = useState(false);
     const [isExporting, setIsExporting] = useState(false);
+    const [refreshBlockedUntil, setRefreshBlockedUntil] = useState(0);
     const BASE_SESSION_OFFSET = 1; // GMT+1
     const [filters, setFilters] = useState({
         symbol: "all",
@@ -59,6 +61,8 @@ export default function App() {
     const [closedToDate, setClosedToDate] = useState("");
     const [currentPage, setCurrentPage] = useState(1);
     const pageSize = 10;
+    const refreshBlocked = refreshBlockedUntil && Date.now() < refreshBlockedUntil;
+    const refreshCooldownSeconds = refreshBlocked ? Math.ceil((refreshBlockedUntil - Date.now()) / 1000) : 0;
 
     const SESSION_FILTER_OPTIONS = [
         "London",
@@ -325,7 +329,30 @@ export default function App() {
         setTrades([]);
     }
 
-    async function loadTrades() {
+    useEffect(() => {
+        if (!refreshBlockedUntil) return;
+        const remainingMs = refreshBlockedUntil - Date.now();
+        if (remainingMs <= 0) {
+            setRefreshBlockedUntil(0);
+            return;
+        }
+        const timeoutId = setTimeout(() => {
+            setRefreshBlockedUntil(0);
+        }, remainingMs);
+        return () => clearTimeout(timeoutId);
+    }, [refreshBlockedUntil]);
+
+    async function loadTrades({ force = false } = {}) {
+        if (isLoading) return;
+        const now = Date.now();
+        if (!force && refreshBlockedUntil && now < refreshBlockedUntil) {
+            const seconds = Math.ceil((refreshBlockedUntil - now) / 1000);
+            setError(`Please wait ${seconds}s before refreshing again.`);
+            return;
+        }
+        if (!force) {
+            setRefreshBlockedUntil(now + REFRESH_COOLDOWN_MS);
+        }
         setError("");
         setIsLoading(true);
         try {
@@ -432,7 +459,7 @@ export default function App() {
 
             setIsEditOpen(false);
             setEditingId(null);
-            await loadTrades();
+            await loadTrades({ force: true });
         } catch (err) {
             setError(String(err));
         }
@@ -453,7 +480,7 @@ export default function App() {
                 throw new Error(`Delete trade failed (${res.status}): ${txt}`);
             }
 
-            await loadTrades();
+            await loadTrades({ force: true });
         } catch (e) {
             setError(String(e));
         }
@@ -503,7 +530,7 @@ export default function App() {
             setEntryPrice("");
             setStopLossPrice("");
             setTakeProfitPrice("");
-            await loadTrades();
+            await loadTrades({ force: true });
         } catch (err) {
             setError(String(err));
         }
@@ -657,7 +684,7 @@ export default function App() {
     }
 
     useEffect(() => {
-        if (token) loadTrades();
+        if (token) loadTrades({ force: true });
     }, [token]);
 
     useEffect(() => {
@@ -687,7 +714,14 @@ export default function App() {
                                 <span className="user-email">{email}</span>
                             </div>
                             <div className="actions">
-                                <button className="btn" onClick={loadTrades}>Refresh</button>
+                                <button
+                                    className="btn"
+                                    onClick={loadTrades}
+                                    disabled={isLoading || refreshBlocked}
+                                    title={refreshBlocked ? `Please wait ${refreshCooldownSeconds}s` : "Refresh trades"}
+                                >
+                                    Refresh
+                                </button>
                                 <button className="btn btn-ghost" onClick={logout}>Logout</button>
                             </div>
                         </div>
