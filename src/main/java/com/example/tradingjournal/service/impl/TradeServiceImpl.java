@@ -32,8 +32,9 @@ public class TradeServiceImpl implements TradeService {
     }
 
     @Override
-    public Trade create(String symbol, String direction, BigDecimal entryPrice, BigDecimal exitPrice, BigDecimal stopLossPrice, BigDecimal takeProfitPrice, Instant closedAt) {
+    public Trade create(String symbol, String direction, BigDecimal entryPrice, BigDecimal exitPrice, String closeReasonOverride, BigDecimal stopLossPrice, BigDecimal takeProfitPrice, Instant closedAt) {
         validateTradeInput(symbol, direction, entryPrice, exitPrice, stopLossPrice, takeProfitPrice);
+        validateClosedTrade(exitPrice, closedAt);
         Metrics metrics = computeMetrics(symbol, direction, entryPrice, stopLossPrice, takeProfitPrice);
 
         Trade t = new Trade();
@@ -41,6 +42,7 @@ public class TradeServiceImpl implements TradeService {
         t.setDirection(direction.toUpperCase());
         t.setEntryPrice(entryPrice);
         t.setExitPrice(exitPrice);
+        t.setCloseReasonOverride(normalizeCloseReason(closeReasonOverride));
         t.setStopLossPrice(stopLossPrice);
         t.setTakeProfitPrice(takeProfitPrice);
         t.setSlPips(metrics.slPips());
@@ -72,8 +74,9 @@ public class TradeServiceImpl implements TradeService {
     }
 
     @Override
-    public Trade update(Long id, String symbol, String direction, BigDecimal entryPrice, BigDecimal exitPrice, BigDecimal stopLossPrice, BigDecimal takeProfitPrice, Instant closedAt, Instant createdAt) {
+    public Trade update(Long id, String symbol, String direction, BigDecimal entryPrice, BigDecimal exitPrice, String closeReasonOverride, BigDecimal stopLossPrice, BigDecimal takeProfitPrice, Instant closedAt, Instant createdAt) {
         validateTradeInput(symbol, direction, entryPrice, exitPrice, stopLossPrice, takeProfitPrice);
+        validateClosedTrade(exitPrice, closedAt);
         Metrics metrics = computeMetrics(symbol, direction, entryPrice, stopLossPrice, takeProfitPrice);
 
         Trade t = findOwnedTrade(id);
@@ -85,6 +88,9 @@ public class TradeServiceImpl implements TradeService {
         t.setDirection(direction.toUpperCase());
         t.setEntryPrice(entryPrice);
         t.setExitPrice(exitPrice);
+        if (closeReasonOverride != null) {
+            t.setCloseReasonOverride(normalizeCloseReason(closeReasonOverride));
+        }
         t.setStopLossPrice(stopLossPrice);
         t.setTakeProfitPrice(takeProfitPrice);
         t.setSlPips(metrics.slPips());
@@ -149,6 +155,20 @@ public class TradeServiceImpl implements TradeService {
         if (stopLossPrice != null && takeProfitPrice != null) {
             validateOrdering(direction, entryPrice, stopLossPrice, takeProfitPrice);
         }
+    }
+
+    private void validateClosedTrade(BigDecimal exitPrice, Instant closedAt) {
+        if (closedAt != null) {
+            if (exitPrice == null || exitPrice.signum() <= 0) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Exit price must be positive when closing a trade");
+            }
+        }
+    }
+
+    private String normalizeCloseReason(String closeReasonOverride) {
+        if (closeReasonOverride == null) return null;
+        String trimmed = closeReasonOverride.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     private Trade findOwnedTrade(Long id) {

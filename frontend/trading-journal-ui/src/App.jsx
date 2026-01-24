@@ -26,7 +26,21 @@ function TradeDetailsPanelLeft({
     formatDuration,
     formatSymbol,
     getSessionLabel,
+    onCloseTrade,
+    toDateTimeLocalValue,
 }) {
+    const [isClosing, setIsClosing] = useState(false);
+    const [closeExitPrice, setCloseExitPrice] = useState("");
+    const [closeClosedAt, setCloseClosedAt] = useState("");
+    const [closeReasonOverride, setCloseReasonOverride] = useState("");
+    const [closeError, setCloseError] = useState("");
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const safeToDateTimeLocalValue = useMemo(() => {
+        if (typeof toDateTimeLocalValue === "function") {
+            return toDateTimeLocalValue;
+        }
+        return () => "";
+    }, [toDateTimeLocalValue]);
     useEffect(() => {
         if (!open) return undefined;
         const handleKeydown = (event) => {
@@ -38,13 +52,12 @@ function TradeDetailsPanelLeft({
         return () => window.removeEventListener("keydown", handleKeydown);
     }, [open, onClose]);
 
-    if (!open || !trade) return null;
-
     const emDash = "\u2014";
     const tolerance = 0.0001;
     const approxEqual = (a, b) => Math.abs(a - b) <= tolerance;
     const getCloseReason = (t) => {
         if (!t?.closedAt || t.exitPrice == null) return emDash;
+        if (t.closeReasonOverride) return t.closeReasonOverride;
         const exitPrice = Number(t.exitPrice);
         if (!Number.isFinite(exitPrice)) return emDash;
         const tp = t.takeProfitPrice == null ? null : Number(t.takeProfitPrice);
@@ -56,6 +69,29 @@ function TradeDetailsPanelLeft({
         if (entry != null && Number.isFinite(entry) && approxEqual(exitPrice, entry)) return "BreakEven";
         return "Manual";
     };
+    const deriveCloseReasonFromExit = (exitPriceValue) => {
+        const exitPrice = Number(exitPriceValue);
+        if (!Number.isFinite(exitPrice)) return "";
+        const tp = trade?.takeProfitPrice == null ? null : Number(trade.takeProfitPrice);
+        const sl = trade?.stopLossPrice == null ? null : Number(trade.stopLossPrice);
+        const entry = trade?.entryPrice == null ? null : Number(trade.entryPrice);
+
+        if (tp != null && Number.isFinite(tp) && approxEqual(exitPrice, tp)) return "TP";
+        if (sl != null && Number.isFinite(sl) && approxEqual(exitPrice, sl)) return "SL";
+        if (entry != null && Number.isFinite(entry) && approxEqual(exitPrice, entry)) return "BreakEven";
+        return "Manual";
+    };
+    useEffect(() => {
+        if (!open || !trade) return;
+        setIsClosing(false);
+        setCloseError("");
+        setCloseExitPrice("");
+        setCloseReasonOverride(trade.closeReasonOverride ?? "");
+        setCloseClosedAt(safeToDateTimeLocalValue(new Date()));
+    }, [open, trade?.id, safeToDateTimeLocalValue]);
+
+    if (!open || !trade) return null;
+
     const detailRows = [
         { label: "Status", value: trade.closedAt ? "CLOSED" : "OPEN" },
         { label: "Entry", value: trade.entryPrice ?? "-" },
@@ -97,6 +133,115 @@ function TradeDetailsPanelLeft({
                         </div>
                     ))}
                 </div>
+                {!trade.closedAt && !isClosing && (
+                    <div className="drawer-actions">
+                        <button
+                            type="button"
+                            className="btn btn-primary"
+                            onClick={() => {
+                                setCloseClosedAt(safeToDateTimeLocalValue(new Date()));
+                                setCloseExitPrice("");
+                                setCloseReasonOverride("");
+                                setCloseError("");
+                                setIsClosing(true);
+                            }}
+                        >
+                            Close trade
+                        </button>
+                    </div>
+                )}
+                {!trade.closedAt && isClosing && (
+                    <div>
+                        {closeError && <div className="banner error">{closeError}</div>}
+                        <div className="drawer-grid">
+                            <label className="field">
+                                Exit Price
+                                <input
+                                    className="input"
+                                    value={closeExitPrice}
+                                    onChange={(e) => {
+                                        const nextValue = e.target.value;
+                                        setCloseExitPrice(nextValue);
+                                        const nextReason = deriveCloseReasonFromExit(nextValue);
+                                        if (nextReason) {
+                                            setCloseReasonOverride(nextReason);
+                                        }
+                                    }}
+                                    placeholder="Exit price"
+                                    type="number"
+                                    step="0.00001"
+                                    min="0"
+                                />
+                            </label>
+                            <label className="field">
+                                Closed Time
+                                <input
+                                    className="input"
+                                    value={closeClosedAt}
+                                    onChange={(e) => setCloseClosedAt(e.target.value)}
+                                    type="datetime-local"
+                                />
+                            </label>
+                            <label className="field">
+                                Close Reason
+                                <select
+                                    className="input"
+                                    value={closeReasonOverride}
+                                    onChange={(e) => setCloseReasonOverride(e.target.value)}
+                                >
+                                    <option value="">None</option>
+                                    <option value="TP">TP</option>
+                                    <option value="SL">SL</option>
+                                    <option value="BreakEven">BreakEven</option>
+                                    <option value="Manual">Manual</option>
+                                </select>
+                            </label>
+                        </div>
+                        <div className="drawer-actions">
+                            <button
+                                type="button"
+                                className="btn"
+                                onClick={() => {
+                                    setIsClosing(false);
+                                    setCloseError("");
+                                }}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                className="btn btn-primary"
+                                disabled={isSubmitting}
+                                onClick={async () => {
+                                    const exitPriceNumber = Number(closeExitPrice);
+                                    if (!Number.isFinite(exitPriceNumber) || exitPriceNumber <= 0) {
+                                        setCloseError("Exit Price must be a positive number.");
+                                        return;
+                                    }
+                                    setCloseError("");
+                                    setIsSubmitting(true);
+                                    try {
+                                        if (typeof onCloseTrade !== "function") {
+                                            throw new Error("Close trade handler is not available.");
+                                        }
+                                        await onCloseTrade(trade, {
+                                            exitPrice: exitPriceNumber,
+                                            closedAtLocal: closeClosedAt,
+                                            closeReasonOverride: closeReasonOverride || null,
+                                        });
+                                        setIsClosing(false);
+                                    } catch (err) {
+                                        setCloseError(String(err).replace(/^Error:\s*/, ""));
+                                    } finally {
+                                        setIsSubmitting(false);
+                                    }
+                                }}
+                            >
+                                Confirm
+                            </button>
+                        </div>
+                    </div>
+                )}
             </div>
         </>
     );
@@ -421,7 +566,7 @@ export default function App() {
         const end = parseCreatedAt(endValue);
         if (!start || !end) return "-";
         const diffMs = end.getTime() - start.getTime();
-        if (diffMs <= 0) return "-";
+        if (diffMs < 0) return "-";
         const totalMinutes = Math.floor(diffMs / 60000);
         const days = Math.floor(totalMinutes / 1440);
         const hours = Math.floor((totalMinutes % 1440) / 60);
@@ -526,6 +671,61 @@ export default function App() {
         setSelectedTradeForDetails(null);
     }
 
+    async function updateTradeRequest(id, payload) {
+        const res = await fetch(`${API}/trades/${id}`, {
+            method: "PUT",
+            headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify(payload),
+        });
+
+        if (!res.ok) {
+            const txt = await res.text();
+            throw new Error(`Update trade failed (${res.status}): ${txt}`);
+        }
+
+        return res.json();
+    }
+
+    async function closeTradeInline(trade, { exitPrice, closedAtLocal, closeReasonOverride }) {
+        const closedAtIso = toIsoFromLocal(closedAtLocal);
+        if (!closedAtIso) {
+            throw new Error("Closed time is required.");
+        }
+        if (!Number.isFinite(exitPrice) || exitPrice <= 0) {
+            throw new Error("Exit Price must be a positive number.");
+        }
+
+        const entryPriceNumber = Number(trade.entryPrice);
+        if (!Number.isFinite(entryPriceNumber) || entryPriceNumber <= 0) {
+            throw new Error("Entry Price is required to close a trade.");
+        }
+
+        const createdAtIso = toIsoString(trade.createdAt);
+        if (!createdAtIso) {
+            throw new Error("Created time is required to close a trade.");
+        }
+
+        const payload = {
+            symbol: trade.symbol,
+            direction: trade.direction,
+            entryPrice: entryPriceNumber,
+            exitPrice,
+            closeReasonOverride,
+            stopLossPrice: trade.stopLossPrice ?? null,
+            takeProfitPrice: trade.takeProfitPrice ?? null,
+            createdAt: createdAtIso,
+            closedAt: closedAtIso,
+        };
+
+        const updated = await updateTradeRequest(trade.id, payload);
+        setSelectedTradeForDetails(updated);
+        await loadTrades({ force: true });
+        return updated;
+    }
+
     async function updateTrade(id, e) {
         e.preventDefault();
         setError("");
@@ -549,6 +749,10 @@ export default function App() {
             setError("Exit must be a positive number.");
             return;
         }
+        if (closedAtIso && (exitPriceNumber == null || exitPriceNumber <= 0)) {
+            setError("Exit must be provided when closing a trade.");
+            return;
+        }
         if (!createdAtIso) {
             setError("Created time is required.");
             return;
@@ -562,29 +766,16 @@ export default function App() {
         }
 
         try {
-            const res = await fetch(`${API}/trades/${id}`, {
-                method: "PUT",
-                headers: {
-                    "Content-Type": "application/json",
-                    Authorization: `Bearer ${token}`,
-                },
-                body: JSON.stringify({
-                    symbol: editSymbol,
-                    direction: editDirection,
-                    entryPrice: entryPriceNumber,
-                    exitPrice: exitPriceNumber,
-                    stopLossPrice: stopLossNumber,
-                    takeProfitPrice: takeProfitNumber,
-                    createdAt: createdAtIso,
-                    closedAt: closedAtIso,
-                }),
+            await updateTradeRequest(id, {
+                symbol: editSymbol,
+                direction: editDirection,
+                entryPrice: entryPriceNumber,
+                exitPrice: exitPriceNumber,
+                stopLossPrice: stopLossNumber,
+                takeProfitPrice: takeProfitNumber,
+                createdAt: createdAtIso,
+                closedAt: closedAtIso,
             });
-
-            if (!res.ok) {
-                const txt = await res.text();
-                throw new Error(`Update trade failed (${res.status}): ${txt}`);
-            }
-
             setIsEditOpen(false);
             setEditingId(null);
             await loadTrades({ force: true });
@@ -1428,6 +1619,8 @@ export default function App() {
                                 formatDuration={formatDuration}
                                 formatSymbol={formatSymbol}
                                 getSessionLabel={getSessionLabel}
+                                onCloseTrade={closeTradeInline}
+                                toDateTimeLocalValue={toDateTimeLocalValue}
                             />
                         </div>
                     </>
