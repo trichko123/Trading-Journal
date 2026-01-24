@@ -17,6 +17,8 @@ public class Trade {
     @Column(nullable = false, length = 20)
     private String direction;
     private BigDecimal entryPrice;
+    @Column(name = "exit_price")
+    private BigDecimal exitPrice;
     private BigDecimal stopLossPrice;
     private BigDecimal takeProfitPrice;
     private BigDecimal slPips;
@@ -92,6 +94,14 @@ public class Trade {
 
     public void setEntryPrice(BigDecimal entryPrice) {
         this.entryPrice = entryPrice;
+    }
+
+    public BigDecimal getExitPrice() {
+        return exitPrice;
+    }
+
+    public void setExitPrice(BigDecimal exitPrice) {
+        this.exitPrice = exitPrice;
     }
 
     public BigDecimal getStopLossPrice() {

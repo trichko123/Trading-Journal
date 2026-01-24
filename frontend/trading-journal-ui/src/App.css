@@ -486,6 +486,14 @@
   box-shadow: -18px 0 28px rgba(0, 0, 0, 0.35);
 }
 
+.drawer-left {
+  left: 0;
+  right: auto;
+  border-left: none;
+  border-right: 1px solid rgba(148, 163, 184, 0.2);
+  box-shadow: 18px 0 28px rgba(0, 0, 0, 0.35);
+}
+
 .drawer-header {
   display: flex;
   justify-content: space-between;
@@ -497,6 +505,41 @@
   margin: 0;
   font-size: 20px;
   color: #e7ebf2;
+}
+
+.drawer-close {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.drawer-details {
+  display: grid;
+  gap: 12px;
+}
+
+.drawer-detail-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.drawer-detail-row:last-child {
+  border-bottom: none;
+}
+
+.drawer-detail-label {
+  color: #94a3b8;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.drawer-detail-value {
+  color: #e7ebf2;
+  font-weight: 600;
+  text-align: right;
 }
 
 .drawer-grid {

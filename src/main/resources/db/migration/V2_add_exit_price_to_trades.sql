@@ -1,0 +1,2 @@
+ALTER TABLE trades
+ADD COLUMN exit_price DECIMAL(19,5);

@@ -18,6 +18,90 @@ const CURRENCY_PAIRS = [
 
 const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 
+function TradeDetailsPanelLeft({
+    trade,
+    open,
+    onClose,
+    formatDate,
+    formatDuration,
+    formatSymbol,
+    getSessionLabel,
+}) {
+    useEffect(() => {
+        if (!open) return undefined;
+        const handleKeydown = (event) => {
+            if (event.key === "Escape") {
+                onClose();
+            }
+        };
+        window.addEventListener("keydown", handleKeydown);
+        return () => window.removeEventListener("keydown", handleKeydown);
+    }, [open, onClose]);
+
+    if (!open || !trade) return null;
+
+    const emDash = "\u2014";
+    const tolerance = 0.0001;
+    const approxEqual = (a, b) => Math.abs(a - b) <= tolerance;
+    const getCloseReason = (t) => {
+        if (!t?.closedAt || t.exitPrice == null) return emDash;
+        const exitPrice = Number(t.exitPrice);
+        if (!Number.isFinite(exitPrice)) return emDash;
+        const tp = t.takeProfitPrice == null ? null : Number(t.takeProfitPrice);
+        const sl = t.stopLossPrice == null ? null : Number(t.stopLossPrice);
+        const entry = t.entryPrice == null ? null : Number(t.entryPrice);
+
+        if (tp != null && Number.isFinite(tp) && approxEqual(exitPrice, tp)) return "TP";
+        if (sl != null && Number.isFinite(sl) && approxEqual(exitPrice, sl)) return "SL";
+        if (entry != null && Number.isFinite(entry) && approxEqual(exitPrice, entry)) return "BreakEven";
+        return "Manual";
+    };
+    const detailRows = [
+        { label: "Status", value: trade.closedAt ? "CLOSED" : "OPEN" },
+        { label: "Entry", value: trade.entryPrice ?? "-" },
+        { label: "Exit", value: trade.exitPrice ?? emDash },
+        { label: "SL", value: trade.stopLossPrice ?? "-" },
+        { label: "TP", value: trade.takeProfitPrice ?? emDash },
+        { label: "SL pips", value: trade.slPips ?? "-" },
+        { label: "TP pips", value: trade.tpPips ?? "-" },
+        { label: "R/R", value: trade.rrRatio ?? "-" },
+        { label: "Session", value: getSessionLabel(trade.createdAt) ?? emDash },
+        { label: "Close Reason", value: getCloseReason(trade) },
+        { label: "Created", value: formatDate(trade.createdAt) },
+        {
+            label: "Duration",
+            value: trade.duration ?? formatDuration(trade.createdAt, trade.closedAt) ?? emDash,
+        },
+    ];
+
+    return (
+        <>
+            <div className="drawer-backdrop" onClick={onClose} />
+            <div className="drawer drawer-left" onClick={(e) => e.stopPropagation()}>
+                <div className="drawer-header">
+                    <h3 className="drawer-title">
+                        {formatSymbol(trade.symbol)} {"\u2022"} {trade.direction}
+                    </h3>
+                    <button
+                        type="button"
+                        className="btn btn-ghost btn-sm drawer-close"
+                        aria-label="Close details panel"
+                        onClick={onClose}
+                    >x</button>
+                </div>
+                <div className="drawer-details">
+                    {detailRows.map((row) => (
+                        <div key={row.label} className="drawer-detail-row">
+                            <span className="drawer-detail-label">{row.label}</span>
+                            <span className="drawer-detail-value">{row.value}</span>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        </>
+    );
+}
+
 export default function App() {
     const [email, setEmail] = useState("test@example.com");
     const [password, setPassword] = useState("pass1234");
@@ -35,12 +119,15 @@ export default function App() {
     const [editSymbol, setEditSymbol] = useState("");
     const [editDirection, setEditDirection] = useState("LONG");
     const [editEntryPrice, setEditEntryPrice] = useState("");
+    const [editExitPrice, setEditExitPrice] = useState("");
     const [editStopLossPrice, setEditStopLossPrice] = useState("");
     const [editTakeProfitPrice, setEditTakeProfitPrice] = useState("");
     const [editCreatedAt, setEditCreatedAt] = useState("");
     const [editClosedAt, setEditClosedAt] = useState("");
     const [confirmPassword, setConfirmPassword] = useState("");
     const [isEditOpen, setIsEditOpen] = useState(false);
+    const [selectedTradeForDetails, setSelectedTradeForDetails] = useState(null);
+    const [isDetailsOpen, setIsDetailsOpen] = useState(false);
 
     const [error, setError] = useState("");
     const [isLoading, setIsLoading] = useState(false);
@@ -50,6 +137,7 @@ export default function App() {
     const [filters, setFilters] = useState({
         symbol: "all",
         direction: "all",
+        status: "all",
         session: "all",
     });
     const [datePreset, setDatePreset] = useState("all");
@@ -72,6 +160,28 @@ export default function App() {
         "Asian / London",
         "New York / Asian",
     ];
+
+    function formatOutcome(trade) {
+        const emDash = "\u2014";
+        if (!trade?.closedAt) return emDash;
+        if (trade.exitPrice == null) return emDash;
+        if (trade.stopLossPrice == null) return emDash;
+        const entry = Number(trade.entryPrice);
+        const exit = Number(trade.exitPrice);
+        const stopLoss = Number(trade.stopLossPrice);
+        if (!Number.isFinite(entry) || !Number.isFinite(exit) || !Number.isFinite(stopLoss)) return emDash;
+
+        const direction = trade.direction?.toUpperCase();
+        const risk = direction === "SHORT" ? (stopLoss - entry) : (entry - stopLoss);
+        if (!Number.isFinite(risk) || risk <= 0) return emDash;
+
+        const reward = direction === "SHORT" ? (entry - exit) : (exit - entry);
+        const rValue = reward / risk;
+        if (!Number.isFinite(rValue)) return emDash;
+
+        const sign = rValue > 0 ? "+" : "";
+        return `${sign}${rValue.toFixed(2)}R`;
+    }
 
     function normalizeEmail(value) {
         return value.trim().toLowerCase();
@@ -379,6 +489,7 @@ export default function App() {
         setEditSymbol(trade.symbol);
         setEditDirection(trade.direction);
         setEditEntryPrice(trade.entryPrice?.toString() || "");
+        setEditExitPrice(trade.exitPrice?.toString() || "");
         setEditStopLossPrice(trade.stopLossPrice?.toString() || "");
         setEditTakeProfitPrice(trade.takeProfitPrice?.toString() || "");
         setEditCreatedAt(toDateTimeLocalValue(trade.createdAt));
@@ -391,6 +502,7 @@ export default function App() {
         setEditSymbol("");
         setEditDirection("LONG");
         setEditEntryPrice("");
+        setEditExitPrice("");
         setEditStopLossPrice("");
         setEditTakeProfitPrice("");
         setEditCreatedAt("");
@@ -404,6 +516,16 @@ export default function App() {
         setError("");
     }
 
+    function openTradeDetails(trade) {
+        setSelectedTradeForDetails(trade);
+        setIsDetailsOpen(true);
+    }
+
+    function closeTradeDetails() {
+        setIsDetailsOpen(false);
+        setSelectedTradeForDetails(null);
+    }
+
     async function updateTrade(id, e) {
         e.preventDefault();
         setError("");
@@ -414,12 +536,17 @@ export default function App() {
         }
 
         const entryPriceNumber = Number(editEntryPrice);
+        const exitPriceNumber = editExitPrice === "" ? null : Number(editExitPrice);
         const stopLossNumber = editStopLossPrice === "" ? null : Number(editStopLossPrice);
         const takeProfitNumber = editTakeProfitPrice === "" ? null : Number(editTakeProfitPrice);
         const createdAtIso = toIsoFromLocal(editCreatedAt);
         const closedAtIso = toIsoFromLocal(editClosedAt);
         if (!Number.isFinite(entryPriceNumber) || entryPriceNumber <= 0) {
             setError("Entry must be a positive number.");
+            return;
+        }
+        if (editExitPrice !== "" && (!Number.isFinite(exitPriceNumber) || exitPriceNumber <= 0)) {
+            setError("Exit must be a positive number.");
             return;
         }
         if (!createdAtIso) {
@@ -445,6 +572,7 @@ export default function App() {
                     symbol: editSymbol,
                     direction: editDirection,
                     entryPrice: entryPriceNumber,
+                    exitPrice: exitPriceNumber,
                     stopLossPrice: stopLossNumber,
                     takeProfitPrice: takeProfitNumber,
                     createdAt: createdAtIso,
@@ -602,6 +730,11 @@ export default function App() {
             if (filters.direction !== "all" && trade.direction !== filters.direction) {
                 return false;
             }
+            if (filters.status !== "all") {
+                const isClosed = Boolean(trade.closedAt);
+                if (filters.status === "open" && isClosed) return false;
+                if (filters.status === "closed" && !isClosed) return false;
+            }
             if (filters.session !== "all") {
                 const label = getSessionLabel(trade.createdAt);
                 if (label !== filters.session) return false;
@@ -674,7 +807,7 @@ export default function App() {
     }
 
     function clearFilters() {
-        setFilters({ symbol: "all", direction: "all", session: "all" });
+        setFilters({ symbol: "all", direction: "all", status: "all", session: "all" });
         setDatePreset("all");
         setFromDate("");
         setToDate("");
@@ -993,16 +1126,12 @@ export default function App() {
                                     <tr>
                                         <th>Symbol</th>
                                         <th>Direction</th>
+                                        <th>Status</th>
                                         <th className="num">Entry</th>
-                                        <th className="num">SL</th>
-                                        <th className="num">TP</th>
-                                        <th className="num">SL pips</th>
-                                        <th className="num">TP pips</th>
-                                        <th className="num">RR</th>
+                                        <th className="num">Exit</th>
+                                        <th className="num">Outcome</th>
                                         <th>Created</th>
                                         <th>Closed</th>
-                                        <th>Duration</th>
-                                        <th>Session</th>
                                         <th className="actions">Actions</th>
                                     </tr>
                                     {showFilters && (
@@ -1034,9 +1163,18 @@ export default function App() {
                                                     <option value="SHORT">SHORT</option>
                                                 </select>
                                             </th>
-                                            <th />
-                                            <th />
-                                            <th />
+                                            <th>
+                                                <select
+                                                    className="input filter-input"
+                                                    value={filters.status}
+                                                    onChange={(e) => setFilters((prev) => ({ ...prev, status: e.target.value }))}
+                                                    aria-label="Filter by status"
+                                                >
+                                                    <option value="all">All</option>
+                                                    <option value="open">Open</option>
+                                                    <option value="closed">Closed</option>
+                                                </select>
+                                            </th>
                                             <th />
                                             <th />
                                             <th />
@@ -1070,22 +1208,6 @@ export default function App() {
                                                     <option value="custom">Custom range</option>
                                                 </select>
                                             </th>
-                                            <th />
-                                            <th>
-                                                <select
-                                                    className="input filter-input"
-                                                    value={filters.session}
-                                                    onChange={(e) => setFilters((prev) => ({ ...prev, session: e.target.value }))}
-                                                    aria-label="Filter by session"
-                                                >
-                                                    <option value="all">All</option>
-                                                    {SESSION_FILTER_OPTIONS.map((option) => (
-                                                        <option key={option} value={option}>
-                                                            {option}
-                                                        </option>
-                                                    ))}
-                                                </select>
-                                            </th>
                                             <th className="actions"></th>
                                         </tr>
                                     )}
@@ -1094,29 +1216,26 @@ export default function App() {
                                     <tbody>
                                     {sortedTrades.length === 0 ? (
                                         <tr>
-                                            <td className="empty" colSpan={13}>No trades yet.</td>
-                                        </tr>
+                                        <td className="empty" colSpan={9}>No trades yet.</td>
+                                    </tr>
                                     ) : (
                                         pagedTrades.map((t) => (
-                                            <tr key={t.id}>
+                                            <tr key={t.id} onClick={() => openTradeDetails(t)}>
                                                 <>
                                                     <td>{formatSymbol(t.symbol)}</td>
                                                     <td>{t.direction}</td>
+                                                    <td>{t.closedAt ? "CLOSED" : "OPEN"}</td>
                                                     <td className="num">{t.entryPrice ?? "-"}</td>
-                                                    <td className="num">{t.stopLossPrice ?? "-"}</td>
-                                                    <td className="num">{t.takeProfitPrice ?? "-"}</td>
-                                                    <td className="num">{t.slPips ?? "-"}</td>
-                                                    <td className="num">{t.tpPips ?? "-"}</td>
-                                                    <td className="num">{t.rrRatio ?? "-"}</td>
+                                                    <td className="num">{t.exitPrice ?? "\u2014"}</td>
+                                                    <td className="num">{formatOutcome(t)}</td>
                                                     <td>{formatDate(t.createdAt)}</td>
                                                     <td>{formatDate(t.closedAt)}</td>
-                                                    <td>{formatDuration(t.createdAt, t.closedAt)}</td>
-                                                    <td>{getSessionLabel(t.createdAt)}</td>
                                                     <td className="actions">
                                                         <div className="actions">
                                                             <button
                                                                 className="btn"
-                                                                onClick={() => {
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
                                                                     startEdit(t);
                                                                     setIsEditOpen(true);
                                                                 }}
@@ -1125,7 +1244,13 @@ export default function App() {
                                                             </button>
                                                             <button
                                                                 className="btn btn-danger"
-                                                                onClick={() => deleteTrade(t.id)}
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    const confirmed = window.confirm("Delete this trade? This action cannot be undone.");
+                                                                    if (confirmed) {
+                                                                        deleteTrade(t.id);
+                                                                    }
+                                                                }}
                                                             >
                                                                 Delete
                                                             </button>
@@ -1229,6 +1354,18 @@ export default function App() {
                                                     />
                                                 </label>
                                                 <label className="field">
+                                                    Exit
+                                                    <input
+                                                        className="input"
+                                                        value={editExitPrice}
+                                                        onChange={(e) => setEditExitPrice(e.target.value)}
+                                                        placeholder="Exit price"
+                                                        type="number"
+                                                        step="0.00001"
+                                                        min="0"
+                                                    />
+                                                </label>
+                                                <label className="field">
                                                     Stop Loss
                                                     <input
                                                         className="input"
@@ -1283,6 +1420,15 @@ export default function App() {
                                     </div>
                                 </>
                             )}
+                            <TradeDetailsPanelLeft
+                                trade={selectedTradeForDetails}
+                                open={isDetailsOpen}
+                                onClose={closeTradeDetails}
+                                formatDate={formatDate}
+                                formatDuration={formatDuration}
+                                formatSymbol={formatSymbol}
+                                getSessionLabel={getSessionLabel}
+                            />
                         </div>
                     </>
                 )}
@@ -1290,3 +1436,4 @@ export default function App() {
         </div>
     );
 }
+
