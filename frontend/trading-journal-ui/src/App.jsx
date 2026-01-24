@@ -916,6 +916,7 @@ export default function App() {
     const [editManualDescription, setEditManualDescription] = useState("");
     const [confirmPassword, setConfirmPassword] = useState("");
     const [isDetailsEditing, setIsDetailsEditing] = useState(false);
+    const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
     const [selectedTradeForDetails, setSelectedTradeForDetails] = useState(null);
     const [isDetailsOpen, setIsDetailsOpen] = useState(false);
 
@@ -1314,6 +1315,7 @@ export default function App() {
     function openTradeDetails(trade) {
         setIsDetailsEditing(false);
         cancelEdit();
+        setIsDeleteModalOpen(false);
         setSelectedTradeForDetails(trade);
         setIsDetailsOpen(true);
     }
@@ -1322,6 +1324,7 @@ export default function App() {
         setIsDetailsOpen(false);
         setSelectedTradeForDetails(null);
         setIsDetailsEditing(false);
+        setIsDeleteModalOpen(false);
         cancelEdit();
     }
 
@@ -1489,10 +1492,14 @@ export default function App() {
 
     async function deleteTradeFromDetails() {
         if (!selectedTradeForDetails) return;
-        const confirmed = window.confirm("Delete this trade? This action cannot be undone.");
-        if (!confirmed) return;
+        setIsDeleteModalOpen(true);
+    }
+
+    async function confirmDeleteTrade() {
+        if (!selectedTradeForDetails) return;
         const ok = await deleteTrade(selectedTradeForDetails.id);
         if (ok) {
+            setIsDeleteModalOpen(false);
             closeTradeDetails();
         }
     }
@@ -1763,6 +1770,16 @@ export default function App() {
         }
         if (currentPage > totalPages) setCurrentPage(totalPages);
     }, [currentPage, totalPages]);
+    useEffect(() => {
+        if (!isDeleteModalOpen) return undefined;
+        const handleKeydown = (event) => {
+            if (event.key === "Escape") {
+                setIsDeleteModalOpen(false);
+            }
+        };
+        window.addEventListener("keydown", handleKeydown);
+        return () => window.removeEventListener("keydown", handleKeydown);
+    }, [isDeleteModalOpen]);
 
     const emDash = "\u2014";
     const formatRValue = (value) => {
@@ -2314,6 +2331,37 @@ export default function App() {
                                 setEditManualDescription={setEditManualDescription}
                                 errorMessage={error}
                             />
+                            {isDeleteModalOpen && (
+                                <>
+                                    <div className="modal-backdrop" onClick={() => setIsDeleteModalOpen(false)} />
+                                    <div
+                                        className="modal"
+                                        role="dialog"
+                                        aria-modal="true"
+                                        aria-labelledby="delete-trade-title"
+                                        onClick={(e) => e.stopPropagation()}
+                                    >
+                                        <h3 className="modal-title" id="delete-trade-title">Delete trade?</h3>
+                                        <p className="modal-text">This action cannot be undone.</p>
+                                        <div className="modal-actions">
+                                            <button
+                                                type="button"
+                                                className="btn btn-ghost"
+                                                onClick={() => setIsDeleteModalOpen(false)}
+                                            >
+                                                Cancel
+                                            </button>
+                                            <button
+                                                type="button"
+                                                className="btn btn-danger"
+                                                onClick={confirmDeleteTrade}
+                                            >
+                                                Delete
+                                            </button>
+                                        </div>
+                                    </div>
+                                </>
+                            )}
                         </div>
                     </>
                 )}
