@@ -598,6 +598,11 @@
   gap: 10px;
 }
 
+.drawer-panel-actions-split {
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
 .drawer-panel-actions .btn {
   flex: 1;
 }
@@ -727,6 +732,15 @@
   color: #e7ebf2;
   font-weight: 600;
   text-align: right;
+}
+
+.drawer-detail-value.is-editing {
+  flex: 1;
+  text-align: left;
+}
+
+.drawer-detail-value.is-editing .input {
+  max-width: 220px;
 }
 
 .drawer-detail-value.is-muted {
