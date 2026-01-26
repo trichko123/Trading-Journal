@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 
 @Entity
+@Table(name = "trades")
 public class Trade {
 
 

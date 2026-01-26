@@ -5,7 +5,10 @@ import "./App.css";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080";
 const API = API_BASE.endsWith("/api") ? API_BASE : `${API_BASE}/api`;
+const API_ROOT = API_BASE.endsWith("/api") ? API_BASE.slice(0, -4) : API_BASE;
 const REFRESH_COOLDOWN_MS = 2000;
+const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
+const ALLOWED_ATTACHMENT_TYPES = ["image/png", "image/jpeg", "image/jpg", "image/webp"];
 
 // Available currency pairs
 const CURRENCY_PAIRS = [
@@ -68,6 +71,9 @@ function TradeDetailsPanelLeft({
     editManualDescription,
     setEditManualDescription,
     errorMessage,
+    panelRef: externalPanelRef,
+    otherPanelRef,
+    isAttachModalOpen,
 }) {
     const ANIMATION_MS = 200;
     const [isMobile, setIsMobile] = useState(false);
@@ -82,7 +88,8 @@ function TradeDetailsPanelLeft({
     const [closeManualDescription, setCloseManualDescription] = useState("");
     const [closeError, setCloseError] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const panelRef = useRef(null);
+    const internalPanelRef = useRef(null);
+    const panelRef = externalPanelRef || internalPanelRef;
     const closeTimeoutRef = useRef(null);
     const lastFocusedElementRef = useRef(null);
     const bodyOverflowRef = useRef("");
@@ -262,6 +269,7 @@ function TradeDetailsPanelLeft({
     useEffect(() => {
         if (!isVisible || isMobile) return undefined;
         const handlePointerDown = (event) => {
+            if (isAttachModalOpen) return;
             const panel = panelRef.current;
             if (!panel) return;
             const target = event.target;
@@ -269,7 +277,9 @@ function TradeDetailsPanelLeft({
             if (target instanceof Element) {
                 const withinTable = target.closest(".trade-row, .table, .table-wrap");
                 if (withinTable) return;
+                if (target.closest(".modal, .lightbox")) return;
             }
+            if (otherPanelRef?.current && otherPanelRef.current.contains(target)) return;
             const path = typeof event.composedPath === "function" ? event.composedPath() : [];
             const clickedTable = path.some(
                 (node) => node?.classList?.contains?.("table") || node?.classList?.contains?.("table-wrap")
@@ -280,7 +290,7 @@ function TradeDetailsPanelLeft({
         };
         document.addEventListener("mousedown", handlePointerDown);
         return () => document.removeEventListener("mousedown", handlePointerDown);
-    }, [isVisible, isMobile, onClose]);
+    }, [isVisible, isMobile, onClose, isAttachModalOpen, otherPanelRef]);
 
     if (!shouldRender || !renderTrade) return null;
 
@@ -1011,6 +1021,215 @@ function TradeDetailsPanelLeft({
     );
 }
 
+function TradeDetailsPanelRight({
+    trade,
+    open,
+    onClose,
+    formatSymbol,
+    onAttach,
+    attachmentsBySection,
+    onPreview,
+    panelRef: externalPanelRef,
+    otherPanelRef,
+    isAttachModalOpen,
+}) {
+    const ANIMATION_MS = 200;
+    const [isMobile, setIsMobile] = useState(false);
+    const [shouldRender, setShouldRender] = useState(false);
+    const [isVisible, setIsVisible] = useState(false);
+    const [renderTrade, setRenderTrade] = useState(trade);
+    const internalPanelRef = useRef(null);
+    const panelRef = externalPanelRef || internalPanelRef;
+    const closeTimeoutRef = useRef(null);
+
+    useEffect(() => {
+        if (typeof window === "undefined" || typeof window.matchMedia !== "function") return undefined;
+        const media = window.matchMedia("(max-width: 900px)");
+        const update = () => setIsMobile(media.matches);
+        update();
+        if (typeof media.addEventListener === "function") {
+            media.addEventListener("change", update);
+            return () => media.removeEventListener("change", update);
+        }
+        media.addListener(update);
+        return () => media.removeListener(update);
+    }, []);
+
+    useEffect(() => {
+        if (trade) {
+            setRenderTrade(trade);
+        }
+    }, [trade]);
+
+    useEffect(() => {
+        if (open) {
+            if (closeTimeoutRef.current) {
+                clearTimeout(closeTimeoutRef.current);
+            }
+            setShouldRender(true);
+            requestAnimationFrame(() => setIsVisible(true));
+            return undefined;
+        }
+        if (shouldRender) {
+            setIsVisible(false);
+            closeTimeoutRef.current = setTimeout(() => {
+                setShouldRender(false);
+            }, ANIMATION_MS + 20);
+        }
+        return () => {
+            if (closeTimeoutRef.current) {
+                clearTimeout(closeTimeoutRef.current);
+            }
+        };
+    }, [open, shouldRender]);
+
+    useEffect(() => {
+        if (!open) return undefined;
+        const handleKeydown = (event) => {
+            if (event.key === "Escape") {
+                onClose();
+            }
+        };
+        window.addEventListener("keydown", handleKeydown);
+        return () => window.removeEventListener("keydown", handleKeydown);
+    }, [open, onClose]);
+
+    useEffect(() => {
+        if (!isVisible || isMobile) return undefined;
+        const handlePointerDown = (event) => {
+            if (isAttachModalOpen) return;
+            const panel = panelRef.current;
+            if (!panel) return;
+            const target = event.target;
+            if (panel.contains(target)) return;
+            if (target instanceof Element) {
+                const withinTable = target.closest(".trade-row, .table, .table-wrap");
+                if (withinTable) return;
+                if (target.closest(".modal, .lightbox")) return;
+            }
+            if (otherPanelRef?.current && otherPanelRef.current.contains(target)) return;
+            const path = typeof event.composedPath === "function" ? event.composedPath() : [];
+            const clickedTable = path.some(
+                (node) => node?.classList?.contains?.("table") || node?.classList?.contains?.("table-wrap")
+            );
+            const clickedRow = path.some((node) => node?.classList?.contains?.("trade-row"));
+            if (clickedTable || clickedRow) return;
+            onClose();
+        };
+        document.addEventListener("mousedown", handlePointerDown);
+        return () => document.removeEventListener("mousedown", handlePointerDown);
+    }, [isVisible, isMobile, onClose, isAttachModalOpen, otherPanelRef]);
+
+    if (!shouldRender || !renderTrade) return null;
+
+    const formatSymbolSafe = typeof formatSymbol === "function" ? formatSymbol : (value) => value || "-";
+    const titleValue = `${formatSymbolSafe(renderTrade.symbol)} \u2022 Screenshots`;
+    const sections = [
+        { key: "PREPARATION", title: "Preparation" },
+        { key: "ENTRY", title: "Entry" },
+        { key: "EXIT", title: "Exit" },
+    ];
+
+    return (
+        <>
+            <div
+                className={`drawer-backdrop drawer-backdrop-animated${isVisible ? " is-open" : ""}${
+                    isMobile ? "" : " drawer-backdrop--passive"
+                }`}
+                onClick={isMobile ? onClose : undefined}
+            />
+            <div
+                ref={panelRef}
+                className={`drawer drawer-right drawer-panel drawer-animated${isVisible ? " is-open" : ""}`}
+                onClick={(e) => e.stopPropagation()}
+                role="dialog"
+                aria-modal={isMobile ? "true" : undefined}
+                aria-labelledby="trade-media-title"
+                tabIndex={-1}
+            >
+                <div className="drawer-scroll">
+                    <div className="drawer-header">
+                        <div className="drawer-title-wrap">
+                            <h3 className="drawer-title" id="trade-media-title">
+                                {titleValue}
+                            </h3>
+                        </div>
+                        <button
+                            type="button"
+                            className="btn btn-ghost btn-sm drawer-close"
+                            aria-label="Close media panel"
+                            onClick={onClose}
+                        >
+                            {"\u00d7"}
+                        </button>
+                    </div>
+                    <div className="drawer-sections">
+                        {sections.map((section) => {
+                            const images = attachmentsBySection?.[section.key] || [];
+                            return (
+                            <div className="drawer-section" key={section.key}>
+                                <h4 className="drawer-section-title">{section.title}</h4>
+                                <div className="drawer-section-body">
+                                    {images.length ? (
+                                        <>
+                                        <div className="screenshot-grid">
+                                            {images.map((image, index) => (
+                                                <button
+                                                    key={`${section.key}-${index}`}
+                                                    type="button"
+                                                    className="screenshot-thumb"
+                                                    aria-label={`${section.title} screenshot ${index + 1}`}
+                                                    onClick={() => {
+                                                        if (image.imageUrl) {
+                                                            onPreview?.(image.imageUrl);
+                                                        }
+                                                    }}
+                                                >
+                                                    <img src={image.imageUrl} alt={image.originalFilename || ""} />
+                                                </button>
+                                            ))}
+                                        </div>
+                                        <div className="screenshot-actions">
+                                            <button
+                                                type="button"
+                                                className="btn btn-ghost btn-sm"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    onAttach?.(section.key);
+                                                }}
+                                                onMouseDown={(e) => e.stopPropagation()}
+                                            >
+                                                Attach
+                                            </button>
+                                        </div>
+                                        </>
+                                    ) : (
+                                        <div className="screenshot-placeholder screenshot-placeholder--row">
+                                            <span>No images yet</span>
+                                            <button
+                                                type="button"
+                                                className="btn btn-ghost btn-sm"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    onAttach?.(section.key);
+                                                }}
+                                                onMouseDown={(e) => e.stopPropagation()}
+                                            >
+                                                Attach
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        );
+                        })}
+                    </div>
+                </div>
+            </div>
+        </>
+    );
+}
+
 export default function App() {
     const [email, setEmail] = useState("test@example.com");
     const [password, setPassword] = useState("pass1234");
@@ -1041,6 +1260,23 @@ export default function App() {
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
     const [selectedTradeForDetails, setSelectedTradeForDetails] = useState(null);
     const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+    const [attachmentsBySection, setAttachmentsBySection] = useState({
+        PREPARATION: [],
+        ENTRY: [],
+        EXIT: [],
+    });
+    const [isAttachModalOpen, setIsAttachModalOpen] = useState(false);
+    const [attachSection, setAttachSection] = useState(null);
+    const [attachTradeId, setAttachTradeId] = useState(null);
+    const [attachFile, setAttachFile] = useState(null);
+    const [attachPreviewUrl, setAttachPreviewUrl] = useState("");
+    const [attachError, setAttachError] = useState("");
+    const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
+    const [isAttachmentDragOver, setIsAttachmentDragOver] = useState(false);
+    const [lightboxUrl, setLightboxUrl] = useState("");
+    const attachmentInputRef = useRef(null);
+    const leftPanelRef = useRef(null);
+    const rightPanelRef = useRef(null);
 
     const [error, setError] = useState("");
     const [isLoading, setIsLoading] = useState(false);
@@ -1377,6 +1613,46 @@ export default function App() {
         return () => clearTimeout(timeoutId);
     }, [refreshBlockedUntil]);
 
+    useEffect(() => {
+        if (!attachFile) {
+            setAttachPreviewUrl("");
+            return undefined;
+        }
+        const url = URL.createObjectURL(attachFile);
+        setAttachPreviewUrl(url);
+        return () => URL.revokeObjectURL(url);
+    }, [attachFile]);
+
+    useEffect(() => {
+        if (!isAttachModalOpen) return undefined;
+        const handlePaste = (event) => {
+            const items = event.clipboardData?.items || [];
+            for (const item of items) {
+                if (item.type && item.type.startsWith("image/")) {
+                    const file = item.getAsFile();
+                    if (file) {
+                        handleAttachmentFile(file);
+                        event.preventDefault();
+                        return;
+                    }
+                }
+            }
+        };
+        window.addEventListener("paste", handlePaste);
+        return () => window.removeEventListener("paste", handlePaste);
+    }, [isAttachModalOpen]);
+
+    useEffect(() => {
+        if (!isAttachModalOpen) return undefined;
+        const handleKeydown = (event) => {
+            if (event.key === "Escape") {
+                closeAttachModal();
+            }
+        };
+        window.addEventListener("keydown", handleKeydown);
+        return () => window.removeEventListener("keydown", handleKeydown);
+    }, [isAttachModalOpen]);
+
     async function loadTrades({ force = false } = {}) {
         if (isLoading) return;
         const now = Date.now();
@@ -1406,6 +1682,33 @@ export default function App() {
             setError(String(err));
         } finally {
             setIsLoading(false);
+        }
+    }
+
+    async function loadAttachments(tradeId) {
+        if (!tradeId) return;
+        try {
+            const res = await fetch(`${API}/trades/${tradeId}/attachments`, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            if (!res.ok) {
+                const txt = await res.text();
+                throw new Error(`Load attachments failed (${res.status}): ${txt}`);
+            }
+            const data = await res.json();
+            const next = { PREPARATION: [], ENTRY: [], EXIT: [] };
+            data.forEach((item) => {
+                if (!item?.section) return;
+                const imageUrl = item.imageUrl?.startsWith("/")
+                    ? `${API_ROOT}${item.imageUrl}`
+                    : item.imageUrl;
+                if (!next[item.section]) next[item.section] = [];
+                next[item.section].push({ ...item, imageUrl });
+            });
+            setAttachmentsBySection(next);
+        } catch (err) {
+            setError(String(err));
+            resetAttachments();
         }
     }
 
@@ -1441,10 +1744,133 @@ export default function App() {
         setError("");
     }
 
+    function resetAttachments() {
+        setAttachmentsBySection({
+            PREPARATION: [],
+            ENTRY: [],
+            EXIT: [],
+        });
+    }
+
+    function openAttachModal(section) {
+        setAttachSection(section);
+        setAttachTradeId(selectedTradeForDetails?.id || null);
+        setAttachFile(null);
+        setAttachError("");
+        setIsAttachmentDragOver(false);
+        setIsUploadingAttachment(false);
+        setIsAttachModalOpen(true);
+    }
+
+    function closeAttachModal() {
+        setIsAttachModalOpen(false);
+        setAttachSection(null);
+        setAttachTradeId(null);
+        resetAttachmentPreview();
+        setIsAttachmentDragOver(false);
+        setIsUploadingAttachment(false);
+    }
+
+    function handleAttachmentFile(file) {
+        if (!file) return;
+        if (!ALLOWED_ATTACHMENT_TYPES.includes(file.type)) {
+            setAttachError("Unsupported file type. Use PNG, JPG, or WEBP.");
+            return;
+        }
+        if (file.size > MAX_ATTACHMENT_BYTES) {
+            setAttachError("File too large. Max size is 10MB.");
+            return;
+        }
+        setAttachError("");
+        setAttachFile(file);
+    }
+
+    function resetAttachmentPreview() {
+        setAttachFile(null);
+        setAttachError("");
+        if (attachmentInputRef.current) {
+            attachmentInputRef.current.value = "";
+        }
+    }
+
+    function handleAttachmentDrop(event) {
+        event.preventDefault();
+        setIsAttachmentDragOver(false);
+        const file = event.dataTransfer?.files?.[0];
+        if (file) {
+            handleAttachmentFile(file);
+        }
+    }
+
+    function handleAttachmentDragOver(event) {
+        event.preventDefault();
+        setIsAttachmentDragOver(true);
+    }
+
+    function handleAttachmentDragLeave(event) {
+        event.preventDefault();
+        setIsAttachmentDragOver(false);
+    }
+
+    async function confirmAttachmentUpload() {
+        if (!attachTradeId) {
+            setAttachError("Select a trade before attaching.");
+            return;
+        }
+        if (!attachSection) {
+            setAttachError("Select a section before attaching.");
+            return;
+        }
+        if (!attachFile) {
+            setAttachError("Please choose an image before confirming.");
+            return;
+        }
+        setAttachError("");
+        setIsUploadingAttachment(true);
+        try {
+            const form = new FormData();
+            form.append("section", attachSection);
+            form.append("file", attachFile);
+            const res = await fetch(`${API}/trades/${attachTradeId}/attachments`, {
+                method: "POST",
+                headers: { Authorization: `Bearer ${token}` },
+                body: form,
+            });
+            if (!res.ok) {
+                const txt = await res.text();
+                throw new Error(`Upload failed (${res.status}): ${txt}`);
+            }
+            const createdRaw = await res.json();
+            const created = {
+                ...createdRaw,
+                imageUrl: createdRaw.imageUrl?.startsWith("/")
+                    ? `${API_ROOT}${createdRaw.imageUrl}`
+                    : createdRaw.imageUrl,
+            };
+            setAttachmentsBySection((prev) => {
+                const next = {
+                    PREPARATION: [...(prev.PREPARATION || [])],
+                    ENTRY: [...(prev.ENTRY || [])],
+                    EXIT: [...(prev.EXIT || [])],
+                };
+                if (!next[created.section]) next[created.section] = [];
+                next[created.section] = [created, ...next[created.section]];
+                return next;
+            });
+            closeAttachModal();
+        } catch (err) {
+            setAttachError(String(err).replace(/^Error:\s*/, ""));
+        } finally {
+            setIsUploadingAttachment(false);
+        }
+    }
+
     function openTradeDetails(trade) {
         setIsDetailsEditing(false);
         cancelEdit();
         setIsDeleteModalOpen(false);
+        closeAttachModal();
+        setLightboxUrl("");
         setSelectedTradeForDetails(trade);
         setIsDetailsOpen(true);
     }
@@ -1454,8 +1880,19 @@ export default function App() {
         setSelectedTradeForDetails(null);
         setIsDetailsEditing(false);
         setIsDeleteModalOpen(false);
+        setLightboxUrl("");
+        closeAttachModal();
+        resetAttachments();
         cancelEdit();
     }
+
+    useEffect(() => {
+        if (!isDetailsOpen || !selectedTradeForDetails?.id) {
+            resetAttachments();
+            return;
+        }
+        loadAttachments(selectedTradeForDetails.id);
+    }, [isDetailsOpen, selectedTradeForDetails?.id]);
 
     async function updateTradeRequest(id, payload) {
         const res = await fetch(`${API}/trades/${id}`, {
@@ -2480,7 +2917,118 @@ export default function App() {
                                 editManualDescription={editManualDescription}
                                 setEditManualDescription={setEditManualDescription}
                                 errorMessage={error}
+                                panelRef={leftPanelRef}
+                                otherPanelRef={rightPanelRef}
+                                isAttachModalOpen={isAttachModalOpen}
                             />
+                            <TradeDetailsPanelRight
+                                trade={selectedTradeForDetails}
+                                open={isDetailsOpen}
+                                onClose={closeTradeDetails}
+                                formatSymbol={formatSymbol}
+                                onAttach={openAttachModal}
+                                attachmentsBySection={attachmentsBySection}
+                                onPreview={(url) => setLightboxUrl(url)}
+                                panelRef={rightPanelRef}
+                                otherPanelRef={leftPanelRef}
+                                isAttachModalOpen={isAttachModalOpen}
+                            />
+                            {isAttachModalOpen && (
+                                <>
+                                    <div className="modal-backdrop" onClick={closeAttachModal} />
+                                    <div
+                                        className="modal attach-modal"
+                                        role="dialog"
+                                        aria-modal="true"
+                                        aria-labelledby="attach-modal-title"
+                                        onClick={(e) => e.stopPropagation()}
+                                        onMouseDown={(e) => e.stopPropagation()}
+                                    >
+                                        <h3 className="modal-title" id="attach-modal-title">
+                                            Attach screenshot{attachSection ? ` (${attachSection.toLowerCase()})` : ""}
+                                        </h3>
+                                        <div
+                                            className={`attach-dropzone${isAttachmentDragOver ? " is-dragover" : ""}`}
+                                            onDrop={handleAttachmentDrop}
+                                            onDragOver={handleAttachmentDragOver}
+                                            onDragLeave={handleAttachmentDragLeave}
+                                        >
+                                            {attachPreviewUrl ? (
+                                                <img src={attachPreviewUrl} alt="Attachment preview" />
+                                            ) : (
+                                                <div className="attach-dropzone-content">
+                                                    <p>Drop an image here</p>
+                                                    <p>Paste from clipboard (Ctrl+V)</p>
+                                                    <p>or choose from PC</p>
+                                                    <button
+                                                        type="button"
+                                                        className="btn btn-ghost btn-sm"
+                                                        onClick={() => attachmentInputRef.current?.click()}
+                                                    >
+                                                        Attach from PC
+                                                    </button>
+                                                </div>
+                                            )}
+                                            <input
+                                                ref={attachmentInputRef}
+                                                type="file"
+                                                accept="image/png,image/jpeg,image/webp"
+                                                className="attach-file-input"
+                                                onChange={(e) => handleAttachmentFile(e.target.files?.[0])}
+                                            />
+                                        </div>
+                                        {attachError && <p className="attach-error">{attachError}</p>}
+                                        {attachPreviewUrl && (
+                                            <div className="modal-actions attach-actions">
+                                                <button
+                                                    type="button"
+                                                    className="btn btn-ghost"
+                                                    onClick={resetAttachmentPreview}
+                                                    disabled={isUploadingAttachment}
+                                                >
+                                                    Replace
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    className="btn btn-ghost"
+                                                    onClick={closeAttachModal}
+                                                    disabled={isUploadingAttachment}
+                                                >
+                                                    Cancel
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    className="btn btn-primary"
+                                                    onClick={(e) => {
+                                                        e.preventDefault();
+                                                        e.stopPropagation();
+                                                        confirmAttachmentUpload();
+                                                    }}
+                                                    disabled={isUploadingAttachment}
+                                                >
+                                                    {isUploadingAttachment ? "Uploading\u2026" : "Confirm"}
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
+                                </>
+                            )}
+                            {lightboxUrl && (
+                                <>
+                                    <div className="modal-backdrop" onClick={() => setLightboxUrl("")} />
+                                    <div className="lightbox" role="dialog" aria-modal="true">
+                                        <button
+                                            type="button"
+                                            className="btn btn-ghost btn-sm lightbox-close"
+                                            aria-label="Close preview"
+                                            onClick={() => setLightboxUrl("")}
+                                        >
+                                            {"\u00d7"}
+                                        </button>
+                                        <img src={lightboxUrl} alt="Screenshot preview" />
+                                    </div>
+                                </>
+                            )}
                             {isDeleteModalOpen && (
                                 <>
                                     <div className="modal-backdrop" onClick={() => setIsDeleteModalOpen(false)} />
