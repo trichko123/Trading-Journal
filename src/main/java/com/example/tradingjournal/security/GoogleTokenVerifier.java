@@ -17,13 +17,15 @@ public class GoogleTokenVerifier {
     private final GoogleIdTokenVerifier verifier;
     private final String clientId;
 
-    public GoogleTokenVerifier(@Value("${app.google.client-id}") String clientId) {
+    public GoogleTokenVerifier(@Value("${app.google.client-id:}") String clientId) {
         this.clientId = clientId;
         var transport = new NetHttpTransport();
         var jsonFactory = JacksonFactory.getDefaultInstance();
-        this.verifier = new GoogleIdTokenVerifier.Builder(transport, jsonFactory)
-                .setAudience(List.of(clientId))
-                .build();
+        var builder = new GoogleIdTokenVerifier.Builder(transport, jsonFactory);
+        if (clientId != null && !clientId.isBlank()) {
+            builder.setAudience(List.of(clientId));
+        }
+        this.verifier = builder.build();
     }
 
     public GoogleIdToken.Payload verify(String idToken) {
