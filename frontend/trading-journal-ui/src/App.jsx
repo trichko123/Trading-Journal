@@ -385,38 +385,45 @@ function TradeDetailsPanelLeft({
                                                 />
                                             }
                                         />
-                                        <DetailRow
-                                            label="Exit"
-                                            isEditing
-                                            value={
-                                                <input
-                                                    className="input"
-                                                    value={editExitPrice}
-                                                    onChange={(e) => {
-                                                        const nextValue = e.target.value;
-                                                        setEditExitPrice(nextValue);
-                                                        const nextReason = deriveCloseReasonFromEditValues({
-                                                            exitValue: nextValue,
-                                                            entryValue: editEntryPrice,
-                                                            stopLossValue: editStopLossPrice,
-                                                            takeProfitValue: editTakeProfitPrice,
-                                                            symbolValue: editSymbol,
-                                                        });
-                                                        if (nextReason) {
-                                                            setEditCloseReasonOverride(nextReason);
-                                                            if (nextReason !== "Manual") {
-                                                                setEditManualReason("");
-                                                                setEditManualDescription("");
+                                        {isClosed ? (
+                                            <DetailRow
+                                                label="Exit"
+                                                isEditing
+                                                value={
+                                                    <input
+                                                        className="input"
+                                                        value={editExitPrice}
+                                                        onChange={(e) => {
+                                                            const nextValue = e.target.value;
+                                                            setEditExitPrice(nextValue);
+                                                            const nextReason = deriveCloseReasonFromEditValues({
+                                                                exitValue: nextValue,
+                                                                entryValue: editEntryPrice,
+                                                                stopLossValue: editStopLossPrice,
+                                                                takeProfitValue: editTakeProfitPrice,
+                                                                symbolValue: editSymbol,
+                                                            });
+                                                            if (nextReason) {
+                                                                setEditCloseReasonOverride(nextReason);
+                                                                if (nextReason !== "Manual") {
+                                                                    setEditManualReason("");
+                                                                    setEditManualDescription("");
+                                                                }
                                                             }
-                                                        }
-                                                    }}
-                                                    placeholder="Exit price"
-                                                    type="number"
-                                                    step="0.00001"
-                                                    min="0"
-                                                />
-                                            }
-                                        />
+                                                        }}
+                                                        placeholder="Exit price"
+                                                        type="number"
+                                                        step="0.00001"
+                                                        min="0"
+                                                    />
+                                                }
+                                            />
+                                        ) : (
+                                            (() => {
+                                                const exitRow = formatRowValue(activeTrade.exitPrice);
+                                                return <DetailRow label="Exit" value={exitRow.displayValue} isMuted={exitRow.isMuted} />;
+                                            })()
+                                        )}
                                         <DetailRow
                                             label="SL"
                                             isEditing
@@ -496,7 +503,36 @@ function TradeDetailsPanelLeft({
                                                     <DetailRow label="Symbol" value={symbolRow.displayValue} isMuted={symbolRow.isMuted} />
                                                     <DetailRow label="Direction" value={directionRow.displayValue} isMuted={directionRow.isMuted} />
                                                     <DetailRow label="Entry" value={entryRow.displayValue} isMuted={entryRow.isMuted} />
-                                                    <DetailRow label="Exit" value={exitRow.displayValue} isMuted={exitRow.isMuted} />
+                                                    <DetailRow
+                                                        label="Exit"
+                                                        isEditing={isClosing && !isClosed}
+                                                        value={
+                                                            isClosing && !isClosed ? (
+                                                                <input
+                                                                    className="input"
+                                                                    value={closeExitPrice}
+                                                                    onChange={(e) => {
+                                                                        const nextValue = e.target.value;
+                                                                        setCloseExitPrice(nextValue);
+                                                                        const nextReason = deriveCloseReasonFromExit(nextValue);
+                                                                        if (nextReason) {
+                                                                            setCloseReasonOverride(nextReason);
+                                                                            if (nextReason !== "Manual") {
+                                                                                setCloseManualDescription("");
+                                                                            }
+                                                                        }
+                                                                    }}
+                                                                    placeholder="Exit price"
+                                                                    type="number"
+                                                                    step="0.00001"
+                                                                    min="0"
+                                                                />
+                                                            ) : (
+                                                                exitRow.displayValue
+                                                            )
+                                                        }
+                                                        isMuted={!isClosing && exitRow.isMuted}
+                                                    />
                                                     <DetailRow label="SL" value={slRow.displayValue} isMuted={slRow.isMuted} />
                                                     <DetailRow label="TP" value={tpRow.displayValue} isMuted={tpRow.isMuted} />
                                                 </>
@@ -532,99 +568,196 @@ function TradeDetailsPanelLeft({
                                 })()}
                             </div>
                         </div>
-                        {(isClosed || isEditing) && (
-                            <div className="drawer-section">
-                                <h4 className="drawer-section-title">Close</h4>
-                                <div className="drawer-section-body">
-                                    {isEditing ? (
-                                        <>
-                                            <DetailRow
-                                                label="Close Reason"
-                                                isEditing
-                                                value={
-                                                    <select
-                                                        className="input"
-                                                        value={editCloseReasonOverride}
-                                                        onChange={(e) => {
-                                                            const nextReason = e.target.value;
-                                                            setEditCloseReasonOverride(nextReason);
-                                                            if (nextReason !== "Manual") {
-                                                                setEditManualReason("");
-                                                                setEditManualDescription("");
-                                                            }
-                                                        }}
-                                                    >
-                                                        <option value="">None</option>
-                                                        <option value="TP">TP</option>
-                                                        <option value="SL">SL</option>
-                                                        <option value="BreakEven">BreakEven</option>
-                                                        <option value="Manual">Manual</option>
-                                                    </select>
-                                                }
-                                            />
-                                            {editCloseReasonOverride === "Manual" && (
+                        <div className="drawer-section">
+                            <h4 className="drawer-section-title">Close</h4>
+                            <div className="drawer-section-body">
+                                {isEditing ? (
+                                    <>
+                                        {isClosed ? (
+                                            <>
                                                 <DetailRow
-                                                    label="Manual Reason"
+                                                    label="Close Reason"
                                                     isEditing
                                                     value={
                                                         <select
                                                             className="input"
-                                                            value={editManualReason}
+                                                            value={editCloseReasonOverride}
                                                             onChange={(e) => {
                                                                 const nextReason = e.target.value;
-                                                                setEditManualReason(nextReason);
-                                                                if (nextReason !== "Other") {
+                                                                setEditCloseReasonOverride(nextReason);
+                                                                if (nextReason !== "Manual") {
+                                                                    setEditManualReason("");
                                                                     setEditManualDescription("");
                                                                 }
                                                             }}
                                                         >
-                                                            <option value="">Select reason</option>
-                                                            <option value="News release">News release</option>
-                                                            <option value="Market Friday closing">Market Friday closing</option>
-                                                            <option value="Other">Other</option>
+                                                            <option value="">None</option>
+                                                            <option value="TP">TP</option>
+                                                            <option value="SL">SL</option>
+                                                            <option value="BreakEven">BreakEven</option>
+                                                            <option value="Manual">Manual</option>
                                                         </select>
                                                     }
                                                 />
-                                            )}
-                                            {editCloseReasonOverride === "Manual" && editManualReason === "Other" && (
-                                                <DetailRow
-                                                    label="Description"
-                                                    isEditing
-                                                    value={
-                                                        <textarea
-                                                            className="input"
-                                                            value={editManualDescription}
-                                                            onChange={(e) => setEditManualDescription(e.target.value)}
-                                                            placeholder="Describe the reason"
-                                                            rows={3}
-                                                        />
-                                                    }
-                                                />
-                                            )}
-                                        </>
-                                    ) : (
-                                        <>
-                                            {(() => {
-                                                const closeRow = formatRowValue(closeReasonValue);
-                                                const manualRow = formatRowValue(activeTrade.manualReason);
-                                                const descriptionRow = formatRowValue(activeTrade.manualDescription);
-                                                return (
-                                                    <>
-                                                        <DetailRow label="Close Reason" value={closeRow.displayValue} isMuted={closeRow.isMuted} />
-                                                        {closeReasonValue === "Manual" && (
-                                                            <DetailRow label="Manual Reason" value={manualRow.displayValue} isMuted={manualRow.isMuted} />
-                                                        )}
-                                                        {closeReasonValue === "Manual" && activeTrade.manualReason === "Other" && (
-                                                            <DetailRow label="Description" value={descriptionRow.displayValue} isMuted={descriptionRow.isMuted} />
-                                                        )}
-                                                    </>
-                                                );
-                                            })()}
-                                        </>
-                                    )}
-                                </div>
+                                                {editCloseReasonOverride === "Manual" && (
+                                                    <DetailRow
+                                                        label="Manual Reason"
+                                                        isEditing
+                                                        value={
+                                                            <select
+                                                                className="input"
+                                                                value={editManualReason}
+                                                                onChange={(e) => {
+                                                                    const nextReason = e.target.value;
+                                                                    setEditManualReason(nextReason);
+                                                                    if (nextReason !== "Other") {
+                                                                        setEditManualDescription("");
+                                                                    }
+                                                                }}
+                                                            >
+                                                                <option value="">Select reason</option>
+                                                                <option value="News release">News release</option>
+                                                                <option value="Market Friday closing">Market Friday closing</option>
+                                                                <option value="Other">Other</option>
+                                                            </select>
+                                                        }
+                                                    />
+                                                )}
+                                                {editCloseReasonOverride === "Manual" && editManualReason === "Other" && (
+                                                    <DetailRow
+                                                        label="Description"
+                                                        isEditing
+                                                        value={
+                                                            <textarea
+                                                                className="input"
+                                                                value={editManualDescription}
+                                                                onChange={(e) => setEditManualDescription(e.target.value)}
+                                                                placeholder="Describe the reason"
+                                                                rows={3}
+                                                            />
+                                                        }
+                                                    />
+                                                )}
+                                            </>
+                                        ) : (
+                                            <>
+                                                {(() => {
+                                                    const closeRow = formatRowValue(closeReasonValue);
+                                                    const descriptionValue = closeReasonValue === "Manual"
+                                                        ? (activeTrade.manualDescription || "")
+                                                        : "";
+                                                    const descriptionRow = formatRowValue(descriptionValue);
+                                                    return (
+                                                        <>
+                                                            <DetailRow label="Close Reason" value={closeRow.displayValue} isMuted={closeRow.isMuted} />
+                                                            {closeReasonValue === "Manual" && (
+                                                                <DetailRow
+                                                                    label="Close Description"
+                                                                    value={descriptionRow.displayValue}
+                                                                    isMuted={descriptionRow.isMuted}
+                                                                />
+                                                            )}
+                                                        </>
+                                                    );
+                                                })()}
+                                            </>
+                                        )}
+                                    </>
+                                ) : (
+                                    <>
+                                        {(() => {
+                                            const closeRow = formatRowValue(closeReasonValue);
+                                            const descriptionValue = closeReasonValue === "Manual"
+                                                ? (activeTrade.manualDescription || "")
+                                                : "";
+                                            const descriptionRow = formatRowValue(descriptionValue);
+                                            return (
+                                                <>
+                                                    {isClosing && !isClosed ? (
+                                                        <>
+                                                            <DetailRow
+                                                                label="Close Reason"
+                                                                isEditing
+                                                                value={
+                                                                    <select
+                                                                        className="input"
+                                                                        value={closeReasonOverride}
+                                                                        onChange={(e) => {
+                                                                            const nextReason = e.target.value;
+                                                                            setCloseReasonOverride(nextReason);
+                                                                            if (nextReason !== "Manual") {
+                                                                                setCloseManualReason("");
+                                                                                setCloseManualDescription("");
+                                                                            }
+                                                                        }}
+                                                                    >
+                                                                        <option value="">None</option>
+                                                                        <option value="TP">TP</option>
+                                                                        <option value="SL">SL</option>
+                                                                        <option value="BreakEven">BreakEven</option>
+                                                                        <option value="Manual">Manual</option>
+                                                                    </select>
+                                                                }
+                                                            />
+                                                            {closeReasonOverride === "Manual" && (
+                                                                <DetailRow
+                                                                    label="Manual Reason"
+                                                                    isEditing
+                                                                    value={
+                                                                        <select
+                                                                            className="input"
+                                                                            value={closeManualReason}
+                                                                            onChange={(e) => {
+                                                                                const nextReason = e.target.value;
+                                                                                setCloseManualReason(nextReason);
+                                                                                if (nextReason !== "Other") {
+                                                                                    setCloseManualDescription("");
+                                                                                }
+                                                                            }}
+                                                                        >
+                                                                            <option value="">Select reason</option>
+                                                                            <option value="News release">News release</option>
+                                                                            <option value="Market Friday closing">Market Friday closing</option>
+                                                                            <option value="Other">Other</option>
+                                                                        </select>
+                                                                    }
+                                                                />
+                                                            )}
+                                                            {closeReasonOverride === "Manual" && closeManualReason === "Other" && (
+                                                                <DetailRow
+                                                                    label="Close Description"
+                                                                    isEditing
+                                                                    value={
+                                                                        <textarea
+                                                                            className="input"
+                                                                            value={closeManualDescription}
+                                                                            onChange={(e) => setCloseManualDescription(e.target.value)}
+                                                                            placeholder="Describe the close"
+                                                                            rows={3}
+                                                                        />
+                                                                    }
+                                                                />
+                                                            )}
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <DetailRow label="Close Reason" value={closeRow.displayValue} isMuted={closeRow.isMuted} />
+                                                            {closeReasonValue === "Manual" && (
+                                                                <DetailRow
+                                                                    label="Close Description"
+                                                                    value={descriptionRow.displayValue}
+                                                                    isMuted={descriptionRow.isMuted}
+                                                                />
+                                                            )}
+                                                        </>
+                                                    )}
+                                                </>
+                                            );
+                                        })()}
+                                    </>
+                                )}
                             </div>
-                        )}
+                        </div>
                         <div className="drawer-section">
                             <h4 className="drawer-section-title">Time</h4>
                             <div className="drawer-section-body">
@@ -642,18 +775,25 @@ function TradeDetailsPanelLeft({
                                                 />
                                             }
                                         />
-                                        <DetailRow
-                                            label="Closed"
-                                            isEditing
-                                            value={
-                                                <input
-                                                    className="input"
-                                                    value={editClosedAt}
-                                                    onChange={(e) => setEditClosedAt(e.target.value)}
-                                                    type="datetime-local"
-                                                />
-                                            }
-                                        />
+                                        {isClosed ? (
+                                            <DetailRow
+                                                label="Closed"
+                                                isEditing
+                                                value={
+                                                    <input
+                                                        className="input"
+                                                        value={editClosedAt}
+                                                        onChange={(e) => setEditClosedAt(e.target.value)}
+                                                        type="datetime-local"
+                                                    />
+                                                }
+                                            />
+                                        ) : (
+                                            (() => {
+                                                const closedRow = formatRowValue(formatDate(activeTrade.closedAt));
+                                                return <DetailRow label="Closed" value={closedRow.displayValue} isMuted={closedRow.isMuted} />;
+                                            })()
+                                        )}
                                     </>
                                 ) : (
                                     <>
@@ -663,7 +803,23 @@ function TradeDetailsPanelLeft({
                                             return (
                                                 <>
                                                     <DetailRow label="Created" value={createdRow.displayValue} isMuted={createdRow.isMuted} />
-                                                    <DetailRow label="Closed" value={closedRow.displayValue} isMuted={closedRow.isMuted} />
+                                                    <DetailRow
+                                                        label="Closed"
+                                                        isEditing={isClosing && !isClosed}
+                                                        value={
+                                                            isClosing && !isClosed ? (
+                                                                <input
+                                                                    className="input"
+                                                                    value={closeClosedAt}
+                                                                    onChange={(e) => setCloseClosedAt(e.target.value)}
+                                                                    type="datetime-local"
+                                                                />
+                                                            ) : (
+                                                                closedRow.displayValue
+                                                            )
+                                                        }
+                                                        isMuted={!isClosing && closedRow.isMuted}
+                                                    />
                                                 </>
                                             );
                                         })()}
@@ -680,150 +836,11 @@ function TradeDetailsPanelLeft({
                     </div>
 
                     {isEditing && errorMessage && <div className="banner error">{errorMessage}</div>}
-
-                    {!isEditing && !isClosed && isClosing && (
-                        <div className="drawer-close-form">
-                            {closeError && <div className="banner error">{closeError}</div>}
-                            <div className="drawer-grid">
-                                <label className="field">
-                                    Exit Price
-                                    <input
-                                        className="input"
-                                        value={closeExitPrice}
-                                        onChange={(e) => {
-                                            const nextValue = e.target.value;
-                                            setCloseExitPrice(nextValue);
-                                            const nextReason = deriveCloseReasonFromExit(nextValue);
-                                            if (nextReason) {
-                                                setCloseReasonOverride(nextReason);
-                                                if (nextReason !== "Manual") {
-                                                    setCloseManualReason("");
-                                                    setCloseManualDescription("");
-                                                }
-                                            }
-                                        }}
-                                        placeholder="Exit price"
-                                        type="number"
-                                        step="0.00001"
-                                        min="0"
-                                    />
-                                </label>
-                                <label className="field">
-                                    Closed Time
-                                    <input
-                                        className="input"
-                                        value={closeClosedAt}
-                                        onChange={(e) => setCloseClosedAt(e.target.value)}
-                                        type="datetime-local"
-                                    />
-                                </label>
-                                <label className="field">
-                                    Close Reason
-                                    <select
-                                        className="input"
-                                        value={closeReasonOverride}
-                                        onChange={(e) => {
-                                            const nextReason = e.target.value;
-                                            setCloseReasonOverride(nextReason);
-                                            if (nextReason !== "Manual") {
-                                                setCloseManualReason("");
-                                                setCloseManualDescription("");
-                                            }
-                                        }}
-                                    >
-                                        <option value="">None</option>
-                                        <option value="TP">TP</option>
-                                        <option value="SL">SL</option>
-                                        <option value="BreakEven">BreakEven</option>
-                                        <option value="Manual">Manual</option>
-                                    </select>
-                                </label>
-                                {closeReasonOverride === "Manual" && (
-                                    <label className="field">
-                                        Manual Reason
-                                        <select
-                                            className="input"
-                                            value={closeManualReason}
-                                            onChange={(e) => {
-                                                const nextReason = e.target.value;
-                                                setCloseManualReason(nextReason);
-                                                if (nextReason !== "Other") {
-                                                    setCloseManualDescription("");
-                                                }
-                                            }}
-                                        >
-                                            <option value="">Select reason</option>
-                                            <option value="News release">News release</option>
-                                            <option value="Market Friday closing">Market Friday closing</option>
-                                            <option value="Other">Other</option>
-                                        </select>
-                                    </label>
-                                )}
-                                {closeReasonOverride === "Manual" && closeManualReason === "Other" && (
-                                    <label className="field">
-                                        Description
-                                        <textarea
-                                            className="input"
-                                            value={closeManualDescription}
-                                            onChange={(e) => setCloseManualDescription(e.target.value)}
-                                            placeholder="Describe the reason"
-                                            rows={3}
-                                        />
-                                    </label>
-                                )}
-                            </div>
-                        </div>
-                    )}
+                    {isClosing && !isEditing && closeError && <div className="banner error">{closeError}</div>}
                 </div>
 
                 <div className="drawer-panel-footer">
-                    <div className="drawer-panel-actions drawer-panel-actions-split">
-                        {!isEditing ? (
-                            <>
-                                <button type="button" className="btn" onClick={onStartEdit}>
-                                    Edit
-                                </button>
-                                <button type="button" className="btn btn-danger" onClick={onDeleteTrade}>
-                                    Delete
-                                </button>
-                            </>
-                        ) : (
-                            <>
-                                <button type="button" className="btn" onClick={onCancelEdit}>
-                                    Cancel
-                                </button>
-                                <button type="button" className="btn btn-primary" onClick={onSaveEdit}>
-                                    Save
-                                </button>
-                            </>
-                        )}
-                    </div>
-
-                    {!isEditing && !isClosed && !isClosing && (
-                        <div className="drawer-panel-actions">
-                            <button
-                                type="button"
-                                className="btn btn-primary"
-                                onClick={() => {
-                                    setCloseClosedAt(safeToDateTimeLocalValue(new Date()));
-                                    setCloseExitPrice("");
-                                    setCloseReasonOverride("");
-                                    setCloseError("");
-                                    setIsClosing(true);
-                                }}
-                            >
-                                Close trade
-                            </button>
-                        </div>
-                    )}
-                    {!isEditing && isClosed && (
-                        <div className="drawer-panel-actions">
-                            <button type="button" className="btn btn-ghost" disabled>
-                                Closed
-                            </button>
-                        </div>
-                    )}
-                    {!isEditing && !isClosed && isClosing && (
+                    {!isEditing && !isClosed && isClosing ? (
                         <div className="drawer-panel-actions">
                             <button
                                 type="button"
@@ -831,6 +848,11 @@ function TradeDetailsPanelLeft({
                                 onClick={() => {
                                     setIsClosing(false);
                                     setCloseError("");
+                                    setCloseExitPrice("");
+                                    setCloseReasonOverride(activeTrade.closeReasonOverride ?? "");
+                                    setCloseManualReason(activeTrade.manualReason ?? "");
+                                    setCloseManualDescription(activeTrade.manualDescription ?? "");
+                                    setCloseClosedAt(safeToDateTimeLocalValue(new Date()));
                                 }}
                             >
                                 Cancel
@@ -843,6 +865,20 @@ function TradeDetailsPanelLeft({
                                     const exitPriceNumber = Number(closeExitPrice);
                                     if (!Number.isFinite(exitPriceNumber) || exitPriceNumber <= 0) {
                                         setCloseError("Exit Price must be a positive number.");
+                                        return;
+                                    }
+                                    const closedAtDate = new Date(closeClosedAt);
+                                    if (!closeClosedAt || Number.isNaN(closedAtDate.getTime())) {
+                                        setCloseError("Closed time is required.");
+                                        return;
+                                    }
+                                    const createdAtDate = new Date(activeTrade.createdAt);
+                                    if (Number.isNaN(createdAtDate.getTime())) {
+                                        setCloseError("Created time is required.");
+                                        return;
+                                    }
+                                    if (closedAtDate.getTime() < createdAtDate.getTime()) {
+                                        setCloseError("Closed time cannot be earlier than Created time.");
                                         return;
                                     }
                                     if (closeReasonOverride === "Manual") {
@@ -882,6 +918,50 @@ function TradeDetailsPanelLeft({
                                 Confirm
                             </button>
                         </div>
+                    ) : (
+                        <>
+                            <div className="drawer-panel-actions drawer-panel-actions-split">
+                                {!isEditing ? (
+                                    <>
+                                        <button type="button" className="btn" onClick={onStartEdit}>
+                                            Edit
+                                        </button>
+                                        <button type="button" className="btn btn-danger" onClick={onDeleteTrade}>
+                                            Delete
+                                        </button>
+                                    </>
+                                ) : (
+                                    <>
+                                        <button type="button" className="btn" onClick={onCancelEdit}>
+                                            Cancel
+                                        </button>
+                                        <button type="button" className="btn btn-primary" onClick={onSaveEdit}>
+                                            Save
+                                        </button>
+                                    </>
+                                )}
+                            </div>
+
+                            {!isEditing && !isClosed && (
+                                <div className="drawer-panel-actions">
+                                    <button
+                                        type="button"
+                                        className="btn btn-primary"
+                                        onClick={() => {
+                                            setCloseClosedAt(safeToDateTimeLocalValue(new Date()));
+                                            setCloseExitPrice("");
+                                            setCloseReasonOverride("");
+                                            setCloseManualReason("");
+                                            setCloseManualDescription("");
+                                            setCloseError("");
+                                            setIsClosing(true);
+                                        }}
+                                    >
+                                        Close trade
+                                    </button>
+                                </div>
+                            )}
+                        </>
                     )}
                 </div>
             </div>
@@ -1429,14 +1509,16 @@ export default function App() {
             setError("Created time is required.");
             return;
         }
-        if (editCloseReasonOverride === "Manual") {
-            if (!editManualReason) {
-                setError("Manual Reason is required when Close Reason is Manual.");
-                return;
-            }
-            if (editManualReason === "Other" && !editManualDescription.trim()) {
-                setError("Description is required when Manual Reason is Other.");
-                return;
+        if (closedAtIso) {
+            if (editCloseReasonOverride === "Manual") {
+                if (!editManualReason) {
+                    setError("Manual Reason is required when Close Reason is Manual.");
+                    return;
+                }
+                if (editManualReason === "Other" && !editManualDescription.trim()) {
+                    setError("Description is required when Manual Reason is Other.");
+                    return;
+                }
             }
         }
         if (stopLossNumber !== null && takeProfitNumber !== null) {
@@ -1448,9 +1530,10 @@ export default function App() {
         }
 
         try {
-            const manualReasonToSend = editCloseReasonOverride === "Manual" ? editManualReason : null;
+            const isClosingEdit = Boolean(closedAtIso);
+            const manualReasonToSend = isClosingEdit && editCloseReasonOverride === "Manual" ? editManualReason : null;
             const manualDescriptionToSend =
-                editCloseReasonOverride === "Manual" && editManualReason === "Other"
+                isClosingEdit && editCloseReasonOverride === "Manual" && editManualReason === "Other"
                     ? editManualDescription.trim()
                     : null;
             const updated = await updateTradeRequest(id, {
@@ -1460,7 +1543,7 @@ export default function App() {
                 exitPrice: exitPriceNumber,
                 stopLossPrice: stopLossNumber,
                 takeProfitPrice: takeProfitNumber,
-                closeReasonOverride: editCloseReasonOverride || null,
+                closeReasonOverride: isClosingEdit ? (editCloseReasonOverride || null) : null,
                 manualReason: manualReasonToSend,
                 manualDescription: manualDescriptionToSend,
                 createdAt: createdAtIso,
