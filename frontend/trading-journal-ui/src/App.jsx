@@ -1059,6 +1059,13 @@ export default function App() {
         return `${sign}${rValue.toFixed(2)}R`;
     }
 
+    function getOutcomeClass(trade) {
+        const rValue = computeOutcomeR(trade);
+        if (!Number.isFinite(rValue)) return "outcome outcome--na";
+        if (Math.abs(rValue) < 1e-9) return "outcome outcome--flat";
+        return rValue > 0 ? "outcome outcome--win" : "outcome outcome--loss";
+    }
+
     function normalizeEmail(value) {
         return value.trim().toLowerCase();
     }
@@ -2318,10 +2325,18 @@ export default function App() {
                                                 <>
                                                     <td>{formatSymbol(t.symbol)}</td>
                                                     <td>{t.direction}</td>
-                                                    <td>{t.closedAt ? "CLOSED" : "OPEN"}</td>
+                                                    <td>
+                                                        {t.closedAt ? (
+                                                            <span className="status-pill status-pill--closed">CLOSED</span>
+                                                        ) : (
+                                                            <span className="status-pill status-pill--open">OPEN</span>
+                                                        )}
+                                                    </td>
                                                     <td className="num">{t.entryPrice ?? "-"}</td>
                                                     <td className="num">{t.exitPrice ?? "\u2014"}</td>
-                                                    <td className="num">{formatOutcome(t)}</td>
+                                                    <td className="num">
+                                                        <span className={getOutcomeClass(t)}>{formatOutcome(t)}</span>
+                                                    </td>
                                                     <td>{formatDate(t.createdAt)}</td>
                                                     <td>{formatDate(t.closedAt)}</td>
                                                 </>
