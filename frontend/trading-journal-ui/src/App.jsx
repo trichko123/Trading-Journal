@@ -70,6 +70,7 @@ function TradeDetailsPanelLeft({
     errorMessage,
 }) {
     const ANIMATION_MS = 200;
+    const [isMobile, setIsMobile] = useState(false);
     const [isClosing, setIsClosing] = useState(false);
     const [shouldRender, setShouldRender] = useState(false);
     const [isVisible, setIsVisible] = useState(false);
@@ -85,6 +86,18 @@ function TradeDetailsPanelLeft({
     const closeTimeoutRef = useRef(null);
     const lastFocusedElementRef = useRef(null);
     const bodyOverflowRef = useRef("");
+    useEffect(() => {
+        if (typeof window === "undefined" || typeof window.matchMedia !== "function") return undefined;
+        const media = window.matchMedia("(max-width: 900px)");
+        const update = () => setIsMobile(media.matches);
+        update();
+        if (typeof media.addEventListener === "function") {
+            media.addEventListener("change", update);
+            return () => media.removeEventListener("change", update);
+        }
+        media.addListener(update);
+        return () => media.removeListener(update);
+    }, []);
     const safeToDateTimeLocalValue = useMemo(() => {
         if (typeof toDateTimeLocalValue === "function") {
             return toDateTimeLocalValue;
@@ -238,13 +251,36 @@ function TradeDetailsPanelLeft({
         };
     }, [isVisible]);
     useEffect(() => {
-        if (!isVisible) return undefined;
+        if (!isVisible || !isMobile) return undefined;
         bodyOverflowRef.current = document.body.style.overflow;
         document.body.style.overflow = "hidden";
         return () => {
             document.body.style.overflow = bodyOverflowRef.current;
         };
-    }, [isVisible]);
+    }, [isVisible, isMobile]);
+
+    useEffect(() => {
+        if (!isVisible || isMobile) return undefined;
+        const handlePointerDown = (event) => {
+            const panel = panelRef.current;
+            if (!panel) return;
+            const target = event.target;
+            if (panel.contains(target)) return;
+            if (target instanceof Element) {
+                const withinTable = target.closest(".trade-row, .table, .table-wrap");
+                if (withinTable) return;
+            }
+            const path = typeof event.composedPath === "function" ? event.composedPath() : [];
+            const clickedTable = path.some(
+                (node) => node?.classList?.contains?.("table") || node?.classList?.contains?.("table-wrap")
+            );
+            const clickedRow = path.some((node) => node?.classList?.contains?.("trade-row"));
+            if (clickedTable || clickedRow) return;
+            onClose();
+        };
+        document.addEventListener("mousedown", handlePointerDown);
+        return () => document.removeEventListener("mousedown", handlePointerDown);
+    }, [isVisible, isMobile, onClose]);
 
     if (!shouldRender || !renderTrade) return null;
 
@@ -264,13 +300,18 @@ function TradeDetailsPanelLeft({
 
     return (
         <>
-            <div className={`drawer-backdrop drawer-backdrop-animated${isVisible ? " is-open" : ""}`} onClick={onClose} />
+            <div
+                className={`drawer-backdrop drawer-backdrop-animated${isVisible ? " is-open" : ""}${
+                    isMobile ? "" : " drawer-backdrop--passive"
+                }`}
+                onClick={isMobile ? onClose : undefined}
+            />
             <div
                 ref={panelRef}
                 className={`drawer drawer-left drawer-panel drawer-animated${isVisible ? " is-open" : ""}`}
                 onClick={(e) => e.stopPropagation()}
                 role="dialog"
-                aria-modal="true"
+                aria-modal={isMobile ? "true" : undefined}
                 aria-labelledby="trade-details-title"
                 tabIndex={-1}
             >
@@ -908,6 +949,7 @@ function TradeDetailsPanelLeft({
                                                     : null,
                                         });
                                         setIsClosing(false);
+                                        onClose();
                                     } catch (err) {
                                         setCloseError(String(err).replace(/^Error:\s*/, ""));
                                     } finally {
@@ -1491,7 +1533,7 @@ export default function App() {
 
         if (!id) {
             setError("No trade selected.");
-            return;
+            return false;
         }
 
         const entryPriceNumber = Number(editEntryPrice);
@@ -1502,29 +1544,29 @@ export default function App() {
         const closedAtIso = toIsoFromLocal(editClosedAt);
         if (!Number.isFinite(entryPriceNumber) || entryPriceNumber <= 0) {
             setError("Entry must be a positive number.");
-            return;
+            return false;
         }
         if (editExitPrice !== "" && (!Number.isFinite(exitPriceNumber) || exitPriceNumber <= 0)) {
             setError("Exit must be a positive number.");
-            return;
+            return false;
         }
         if (closedAtIso && (exitPriceNumber == null || exitPriceNumber <= 0)) {
             setError("Exit must be provided when closing a trade.");
-            return;
+            return false;
         }
         if (!createdAtIso) {
             setError("Created time is required.");
-            return;
+            return false;
         }
         if (closedAtIso) {
             if (editCloseReasonOverride === "Manual") {
                 if (!editManualReason) {
                     setError("Manual Reason is required when Close Reason is Manual.");
-                    return;
+                    return false;
                 }
                 if (editManualReason === "Other" && !editManualDescription.trim()) {
                     setError("Description is required when Manual Reason is Other.");
-                    return;
+                    return false;
                 }
             }
         }
@@ -1532,7 +1574,7 @@ export default function App() {
             const derived = computeDerived(editSymbol, editDirection, entryPriceNumber, stopLossNumber, takeProfitNumber);
             if (!derived) {
                 setError("Entry, Stop Loss, and Take Profit must be valid and ordered correctly for the direction.");
-                return;
+                return false;
             }
         }
 
@@ -1560,8 +1602,10 @@ export default function App() {
             setIsDetailsEditing(false);
             setEditingId(null);
             await loadTrades({ force: true });
+            return true;
         } catch (err) {
             setError(String(err));
+            return false;
         }
     }
 
@@ -1577,7 +1621,10 @@ export default function App() {
     }
 
     async function saveDetailsEdit() {
-        await updateTrade(editingId);
+        const ok = await updateTrade(editingId);
+        if (ok) {
+            closeTradeDetails();
+        }
     }
 
     async function deleteTradeFromDetails() {
@@ -2321,7 +2368,12 @@ export default function App() {
                                     </tr>
                                     ) : (
                                         pagedTrades.map((t) => (
-                                            <tr key={t.id} onClick={() => openTradeDetails(t)}>
+                                            <tr
+                                                key={t.id}
+                                                className={`trade-row${selectedTradeForDetails?.id === t.id && isDetailsOpen ? " trade-row--selected" : ""}`}
+                                                onMouseDown={(e) => e.stopPropagation()}
+                                                onClick={() => openTradeDetails(t)}
+                                            >
                                                 <>
                                                     <td>{formatSymbol(t.symbol)}</td>
                                                     <td>{t.direction}</td>

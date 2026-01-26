@@ -403,6 +403,26 @@
   background: #1b2133;
 }
 
+.table tbody tr.trade-row {
+  cursor: pointer;
+}
+
+.table tbody tr.trade-row td {
+  transition: background-color 0.16s ease;
+}
+
+.table tbody tr.trade-row:hover td {
+  background: #1e2538;
+}
+
+.table tbody tr.trade-row:active td {
+  background: #232b40;
+}
+
+.table tbody tr.trade-row--selected td {
+  background: #20283d;
+}
+
 .table td.num,
 .table th.num {
   text-align: right;
@@ -638,6 +658,11 @@
   pointer-events: auto;
 }
 
+.drawer-backdrop--passive {
+  background: transparent;
+  pointer-events: none;
+}
+
 .drawer {
   position: fixed;
   top: 0;
@@ -651,6 +676,8 @@
   padding: 16px;
   overflow-y: auto;
   box-shadow: -18px 0 28px rgba(0, 0, 0, 0.35);
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.35) transparent;
 }
 
 .drawer-left {
@@ -683,6 +710,31 @@
   padding: 18px 18px 8px;
   overflow-y: auto;
   flex: 1;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.35) transparent;
+}
+
+.drawer::-webkit-scrollbar,
+.drawer-panel .drawer-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+
+.drawer::-webkit-scrollbar-track,
+.drawer-panel .drawer-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.drawer::-webkit-scrollbar-thumb,
+.drawer-panel .drawer-scroll::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.3);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+.drawer::-webkit-scrollbar-thumb:hover,
+.drawer-panel .drawer-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.5);
 }
 
 .drawer-panel .drawer-panel-footer {
