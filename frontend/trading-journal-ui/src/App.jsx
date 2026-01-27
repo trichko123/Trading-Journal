@@ -1339,6 +1339,10 @@ export default function App() {
     const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
     const [isAttachmentDragOver, setIsAttachmentDragOver] = useState(false);
     const [lightboxUrl, setLightboxUrl] = useState("");
+    const [lightboxScale, setLightboxScale] = useState(1);
+    const [lightboxOffset, setLightboxOffset] = useState({ x: 0, y: 0 });
+    const [lightboxDragging, setLightboxDragging] = useState(false);
+    const [lightboxDragStart, setLightboxDragStart] = useState({ x: 0, y: 0 });
     const attachmentInputRef = useRef(null);
     const leftPanelRef = useRef(null);
     const rightPanelRef = useRef(null);
@@ -2508,6 +2512,14 @@ export default function App() {
         return () => window.removeEventListener("keydown", handleKeydown);
     }, [isAttachmentDeleteModalOpen]);
 
+    useEffect(() => {
+        if (!lightboxUrl) return;
+        setLightboxScale(1);
+        setLightboxOffset({ x: 0, y: 0 });
+        setLightboxDragging(false);
+        setLightboxDragStart({ x: 0, y: 0 });
+    }, [lightboxUrl]);
+
     const emDash = "\u2014";
     const formatRValue = (value) => {
         if (!Number.isFinite(value)) return emDash;
@@ -3174,7 +3186,20 @@ export default function App() {
                             {lightboxUrl && (
                                 <>
                                     <div className="modal-backdrop" onClick={() => setLightboxUrl("")} />
-                                    <div className="lightbox" role="dialog" aria-modal="true">
+                                    <div
+                                        className="lightbox"
+                                        role="dialog"
+                                        aria-modal="true"
+                                        onClick={(e) => e.stopPropagation()}
+                                        onMouseMove={(e) => {
+                                            if (!lightboxDragging || lightboxScale <= 1) return;
+                                            const nextX = e.clientX - lightboxDragStart.x;
+                                            const nextY = e.clientY - lightboxDragStart.y;
+                                            setLightboxOffset({ x: nextX, y: nextY });
+                                        }}
+                                        onMouseUp={() => setLightboxDragging(false)}
+                                        onMouseLeave={() => setLightboxDragging(false)}
+                                    >
                                         <button
                                             type="button"
                                             className="btn btn-ghost btn-sm lightbox-close"
@@ -3183,7 +3208,37 @@ export default function App() {
                                         >
                                             {"\u00d7"}
                                         </button>
-                                        <img src={lightboxUrl} alt="Screenshot preview" />
+                                        <img
+                                            src={lightboxUrl}
+                                            alt="Screenshot preview"
+                                            className={`lightbox-image${lightboxScale > 1 ? " is-zoomed" : ""}${
+                                                lightboxDragging ? " is-dragging" : ""
+                                            }`}
+                                            style={{
+                                                transform: `translate(${lightboxOffset.x}px, ${lightboxOffset.y}px) scale(${lightboxScale})`,
+                                                transformOrigin: "center center",
+                                            }}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                if (lightboxScale > 1) {
+                                                    setLightboxScale(1);
+                                                    setLightboxOffset({ x: 0, y: 0 });
+                                                    setLightboxDragging(false);
+                                                    return;
+                                                }
+                                                setLightboxScale(2);
+                                            }}
+                                            onMouseDown={(e) => {
+                                                e.stopPropagation();
+                                                if (lightboxScale <= 1) return;
+                                                setLightboxDragging(true);
+                                                setLightboxDragStart({
+                                                    x: e.clientX - lightboxOffset.x,
+                                                    y: e.clientY - lightboxOffset.y,
+                                                });
+                                            }}
+                                        />
+                                        <p className="lightbox-hint">Click to zoom • Drag to move</p>
                                     </div>
                                 </>
                             )}
