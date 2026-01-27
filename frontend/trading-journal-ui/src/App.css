@@ -647,6 +647,72 @@
   gap: 10px;
 }
 
+.review-modal {
+  width: min(520px, 92vw);
+}
+
+.review-field {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.review-label {
+  color: #94a3b8;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.review-toggle-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.review-toggle-btn.is-active {
+  background: rgba(56, 189, 248, 0.18);
+  border-color: rgba(56, 189, 248, 0.45);
+  color: #e2e8f0;
+}
+
+.review-textarea {
+  min-height: 90px;
+}
+
+.review-range-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.review-range-value {
+  font-size: 14px;
+  color: #e2e8f0;
+}
+
+.review-range {
+  width: 100%;
+}
+
+.review-hint {
+  margin: 6px 0 16px;
+  color: #9aa3b2;
+  font-size: 12px;
+}
+
+.final-note-edit {
+  border-color: rgba(56, 189, 248, 0.6);
+  background: rgba(56, 189, 248, 0.12);
+  color: #e2e8f0;
+}
+
+.final-note-edit:hover {
+  background: rgba(56, 189, 248, 0.2);
+  border-color: rgba(56, 189, 248, 0.85);
+}
+
 .drawer-backdrop-animated {
   opacity: 0;
   pointer-events: none;

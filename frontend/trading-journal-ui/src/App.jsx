@@ -58,6 +58,7 @@ function TradeDetailsPanelLeft({
     getSessionLabel,
     formatOutcome,
     onCloseTrade,
+    onOpenReview,
     toDateTimeLocalValue,
     isEditing,
     onStartEdit,
@@ -90,6 +91,7 @@ function TradeDetailsPanelLeft({
     panelRef: externalPanelRef,
     otherPanelRef,
     isAttachModalOpen,
+    isReviewModalOpen,
 }) {
     const ANIMATION_MS = 200;
     const [isMobile, setIsMobile] = useState(false);
@@ -285,7 +287,7 @@ function TradeDetailsPanelLeft({
     useEffect(() => {
         if (!isVisible || isMobile) return undefined;
         const handlePointerDown = (event) => {
-            if (isAttachModalOpen) return;
+            if (isAttachModalOpen || isReviewModalOpen) return;
             const panel = panelRef.current;
             if (!panel) return;
             const target = event.target;
@@ -306,7 +308,7 @@ function TradeDetailsPanelLeft({
         };
         document.addEventListener("mousedown", handlePointerDown);
         return () => document.removeEventListener("mousedown", handlePointerDown);
-    }, [isVisible, isMobile, onClose, isAttachModalOpen, otherPanelRef]);
+    }, [isVisible, isMobile, onClose, isAttachModalOpen, isReviewModalOpen, otherPanelRef]);
 
     if (!shouldRender || !renderTrade) return null;
 
@@ -322,6 +324,14 @@ function TradeDetailsPanelLeft({
         const isEmpty = value == null || value === "" || value === "-";
         const displayValue = isEmpty ? emDash : value;
         return { displayValue, isMuted: displayValue === emDash };
+    };
+    const formatFollowedPlan = (value) => {
+        if (!value) return emDash;
+        const upper = String(value).toUpperCase();
+        if (upper === "YES") return "Yes";
+        if (upper === "NO") return "No";
+        if (upper === "MAYBE") return "Maybe";
+        return value;
     };
 
     return (
@@ -900,6 +910,56 @@ function TradeDetailsPanelLeft({
                                 })()}
                             </div>
                         </div>
+                        {isClosed && (
+                            <div className="drawer-section">
+                                <div className="drawer-section-head">
+                                    <h4 className="drawer-section-title">Final Note</h4>
+                                    {isEditing && (
+                                        <button
+                                            type="button"
+                                            className="btn btn-ghost btn-sm final-note-edit"
+                                            onClick={() => onOpenReview?.(activeTrade)}
+                                        >
+                                            Edit final note
+                                        </button>
+                                    )}
+                                </div>
+                                <div className="drawer-section-body">
+                                    {(() => {
+                                        const followedRow = formatRowValue(formatFollowedPlan(activeTrade.followedPlan));
+                                        const mistakesRow = formatRowValue(activeTrade.mistakesText);
+                                        const improvementRow = formatRowValue(activeTrade.improvementText);
+                                        const confidenceRow = formatRowValue(
+                                            Number.isFinite(activeTrade.confidence) ? `${activeTrade.confidence}` : null
+                                        );
+                                        return (
+                                            <>
+                                                <DetailRow
+                                                    label="Followed plan"
+                                                    value={followedRow.displayValue}
+                                                    isMuted={followedRow.isMuted}
+                                                />
+                                                <DetailRow
+                                                    label="Mistakes"
+                                                    value={mistakesRow.displayValue}
+                                                    isMuted={mistakesRow.isMuted}
+                                                />
+                                                <DetailRow
+                                                    label="Do differently"
+                                                    value={improvementRow.displayValue}
+                                                    isMuted={improvementRow.isMuted}
+                                                />
+                                                <DetailRow
+                                                    label="Confidence"
+                                                    value={confidenceRow.displayValue}
+                                                    isMuted={confidenceRow.isMuted}
+                                                />
+                                            </>
+                                        );
+                                    })()}
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     {isEditing && errorMessage && <div className="banner error">{errorMessage}</div>}
@@ -1050,6 +1110,7 @@ function TradeDetailsPanelRight({
     panelRef: externalPanelRef,
     otherPanelRef,
     isAttachModalOpen,
+    isReviewModalOpen,
 }) {
     const ANIMATION_MS = 200;
     const [isMobile, setIsMobile] = useState(false);
@@ -1122,7 +1183,7 @@ function TradeDetailsPanelRight({
     useEffect(() => {
         if (!isVisible || isMobile) return undefined;
         const handlePointerDown = (event) => {
-            if (isAttachModalOpen) return;
+            if (isAttachModalOpen || isReviewModalOpen) return;
             const panel = panelRef.current;
             if (!panel) return;
             const target = event.target;
@@ -1143,7 +1204,7 @@ function TradeDetailsPanelRight({
         };
         document.addEventListener("mousedown", handlePointerDown);
         return () => document.removeEventListener("mousedown", handlePointerDown);
-    }, [isVisible, isMobile, onClose, isAttachModalOpen, otherPanelRef]);
+    }, [isVisible, isMobile, onClose, isAttachModalOpen, isReviewModalOpen, otherPanelRef]);
 
     if (!shouldRender || !renderTrade) return null;
 
@@ -1346,6 +1407,16 @@ export default function App() {
     const attachmentInputRef = useRef(null);
     const leftPanelRef = useRef(null);
     const rightPanelRef = useRef(null);
+    const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
+    const [reviewTradeId, setReviewTradeId] = useState(null);
+    const [reviewFollowedPlan, setReviewFollowedPlan] = useState("");
+    const [reviewMistakesMode, setReviewMistakesMode] = useState("none");
+    const [reviewMistakesText, setReviewMistakesText] = useState("");
+    const [reviewImprovementMode, setReviewImprovementMode] = useState("none");
+    const [reviewImprovementText, setReviewImprovementText] = useState("");
+    const [reviewConfidence, setReviewConfidence] = useState(5);
+    const [reviewError, setReviewError] = useState("");
+    const [isReviewSubmitting, setIsReviewSubmitting] = useState(false);
 
     const [error, setError] = useState("");
     const [isLoading, setIsLoading] = useState(false);
@@ -2106,7 +2177,78 @@ export default function App() {
         const updated = await updateTradeRequest(trade.id, payload);
         setSelectedTradeForDetails(updated);
         await loadTrades({ force: true });
+        openReviewModal(updated);
         return updated;
+    }
+
+    function openReviewModal(trade) {
+        if (!trade?.id) return;
+        setReviewTradeId(trade.id);
+        setReviewFollowedPlan(trade.followedPlan ?? "");
+        const existingMistakes = trade.mistakesText ?? "";
+        setReviewMistakesText(existingMistakes);
+        setReviewMistakesMode(existingMistakes ? "write" : "none");
+        const existingImprovement = trade.improvementText ?? "";
+        setReviewImprovementText(existingImprovement);
+        setReviewImprovementMode(existingImprovement ? "write" : "none");
+        setReviewConfidence(Number.isFinite(trade.confidence) ? trade.confidence : 5);
+        setReviewError("");
+        setIsReviewSubmitting(false);
+        setIsReviewModalOpen(true);
+    }
+
+    function closeReviewModal() {
+        setIsReviewModalOpen(false);
+        setReviewTradeId(null);
+        setReviewError("");
+    }
+
+    async function updateTradeReviewRequest(id, payload) {
+        const res = await fetch(`${API}/trades/${id}/review`, {
+            method: "PATCH",
+            headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify(payload),
+        });
+
+        if (!res.ok) {
+            const txt = await res.text();
+            throw new Error(`Update review failed (${res.status}): ${txt}`);
+        }
+
+        return res.json();
+    }
+
+    async function submitReview() {
+        if (!reviewTradeId) return;
+        if (!reviewFollowedPlan) {
+            setReviewError("Please select whether you followed the plan.");
+            return;
+        }
+        if (!Number.isFinite(reviewConfidence) || reviewConfidence < 1 || reviewConfidence > 10) {
+            setReviewError("Confidence must be between 1 and 10.");
+            return;
+        }
+        setReviewError("");
+        setIsReviewSubmitting(true);
+        try {
+            const payload = {
+                followedPlan: reviewFollowedPlan,
+                mistakesText: reviewMistakesMode === "write" ? reviewMistakesText : "",
+                improvementText: reviewImprovementMode === "write" ? reviewImprovementText : "",
+                confidence: reviewConfidence,
+            };
+            const updated = await updateTradeReviewRequest(reviewTradeId, payload);
+            setSelectedTradeForDetails((prev) => (prev?.id === updated.id ? updated : prev));
+            setTrades((prev) => prev.map((trade) => (trade.id === updated.id ? updated : trade)));
+            closeReviewModal();
+        } catch (err) {
+            setReviewError(String(err).replace(/^Error:\s*/, ""));
+        } finally {
+            setIsReviewSubmitting(false);
+        }
     }
 
     async function updateTrade(id, e) {
@@ -3053,6 +3195,7 @@ export default function App() {
                                 getSessionLabel={getSessionLabel}
                                 formatOutcome={formatOutcome}
                                 onCloseTrade={closeTradeInline}
+                                onOpenReview={(trade) => openReviewModal(trade)}
                                 toDateTimeLocalValue={toDateTimeLocalValue}
                                 isEditing={isDetailsEditing}
                                 onStartEdit={beginDetailsEdit}
@@ -3085,6 +3228,7 @@ export default function App() {
                                 panelRef={leftPanelRef}
                                 otherPanelRef={rightPanelRef}
                                 isAttachModalOpen={isAttachModalOpen}
+                                isReviewModalOpen={isReviewModalOpen}
                             />
                             <TradeDetailsPanelRight
                                 trade={selectedTradeForDetails}
@@ -3102,6 +3246,7 @@ export default function App() {
                                 panelRef={rightPanelRef}
                                 otherPanelRef={leftPanelRef}
                                 isAttachModalOpen={isAttachModalOpen}
+                                isReviewModalOpen={isReviewModalOpen}
                             />
                             {isAttachModalOpen && (
                                 <>
@@ -3308,6 +3453,146 @@ export default function App() {
                                                 onClick={confirmDeleteAttachment}
                                             >
                                                 Delete
+                                            </button>
+                                        </div>
+                                    </div>
+                                </>
+                            )}
+                            {isReviewModalOpen && (
+                                <>
+                                    <div className="modal-backdrop" onClick={closeReviewModal} />
+                                    <div
+                                        className="modal review-modal"
+                                        role="dialog"
+                                        aria-modal="true"
+                                        aria-labelledby="review-modal-title"
+                                        onClick={(e) => e.stopPropagation()}
+                                        onMouseDown={(e) => e.stopPropagation()}
+                                    >
+                                        <h3 className="modal-title" id="review-modal-title">Final Note</h3>
+                                        <p className="modal-text">Capture your post-trade thoughts while they’re fresh.</p>
+                                        {reviewError && <div className="banner error">{reviewError}</div>}
+                                        <div className="review-field">
+                                            <span className="review-label">Followed plan?</span>
+                                            <div className="review-toggle-group">
+                                                {["YES", "NO", "MAYBE"].map((value) => (
+                                                    <button
+                                                        key={value}
+                                                        type="button"
+                                                        className={`btn btn-ghost btn-sm review-toggle-btn${
+                                                            reviewFollowedPlan === value ? " is-active" : ""
+                                                        }`}
+                                                        onClick={() => setReviewFollowedPlan(value)}
+                                                    >
+                                                        {value === "MAYBE" ? "Maybe" : value.charAt(0) + value.slice(1).toLowerCase()}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                        <div className="review-field">
+                                            <span className="review-label">Mistakes?</span>
+                                            <div className="review-toggle-group">
+                                                <button
+                                                    type="button"
+                                                    className={`btn btn-ghost btn-sm review-toggle-btn${
+                                                        reviewMistakesMode === "none" ? " is-active" : ""
+                                                    }`}
+                                                    onClick={() => {
+                                                        setReviewMistakesMode("none");
+                                                        setReviewMistakesText("");
+                                                    }}
+                                                >
+                                                    None
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    className={`btn btn-ghost btn-sm review-toggle-btn${
+                                                        reviewMistakesMode === "write" ? " is-active" : ""
+                                                    }`}
+                                                    onClick={() => setReviewMistakesMode("write")}
+                                                >
+                                                    Write
+                                                </button>
+                                            </div>
+                                            {reviewMistakesMode === "write" && (
+                                                <textarea
+                                                    className="input review-textarea"
+                                                    rows={3}
+                                                    value={reviewMistakesText}
+                                                    onChange={(e) => setReviewMistakesText(e.target.value)}
+                                                    placeholder="What went wrong?"
+                                                />
+                                            )}
+                                        </div>
+                                        <div className="review-field">
+                                            <span className="review-label">What would I do differently?</span>
+                                            <div className="review-toggle-group">
+                                                <button
+                                                    type="button"
+                                                    className={`btn btn-ghost btn-sm review-toggle-btn${
+                                                        reviewImprovementMode === "none" ? " is-active" : ""
+                                                    }`}
+                                                    onClick={() => {
+                                                        setReviewImprovementMode("none");
+                                                        setReviewImprovementText("");
+                                                    }}
+                                                >
+                                                    Nothing
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    className={`btn btn-ghost btn-sm review-toggle-btn${
+                                                        reviewImprovementMode === "write" ? " is-active" : ""
+                                                    }`}
+                                                    onClick={() => setReviewImprovementMode("write")}
+                                                >
+                                                    Write
+                                                </button>
+                                            </div>
+                                            {reviewImprovementMode === "write" && (
+                                                <textarea
+                                                    className="input review-textarea"
+                                                    rows={3}
+                                                    value={reviewImprovementText}
+                                                    onChange={(e) => setReviewImprovementText(e.target.value)}
+                                                    placeholder="Next time I will..."
+                                                />
+                                            )}
+                                        </div>
+                                        <div className="review-field">
+                                            <div className="review-range-header">
+                                                <span className="review-label">Confidence (1–10)</span>
+                                                <span className="review-range-value">{reviewConfidence}</span>
+                                            </div>
+                                            <input
+                                                className="review-range"
+                                                type="range"
+                                                min="1"
+                                                max="10"
+                                                step="1"
+                                                value={reviewConfidence}
+                                                onChange={(e) => setReviewConfidence(Number(e.target.value))}
+                                            />
+                                        </div>
+                                        <p className="review-hint">
+                                            You can come back later and edit this note as you review the trade.
+                                        </p>
+                                        <div className="modal-actions">
+                                            <button
+                                                type="button"
+                                                className="btn btn-ghost"
+                                                onClick={closeReviewModal}
+                                                disabled={isReviewSubmitting}
+                                            >
+                                                Cancel
+                                            </button>
+                                            <button
+                                                type="button"
+                                                className="btn btn-primary"
+                                                onClick={submitReview}
+                                                disabled={isReviewSubmitting}
+                                            >
+                                                {isReviewSubmitting ? "Saving\u2026" : "Submit"}
                                             </button>
                                         </div>
                                     </div>
