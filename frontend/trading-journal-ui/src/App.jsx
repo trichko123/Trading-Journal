@@ -1268,8 +1268,6 @@ function TradeDetailsPanelRight({
                                                             type="button"
                                                             className="btn btn-ghost btn-sm screenshot-remove"
                                                             onClick={() => {
-                                                                const confirmed = window.confirm("Remove this screenshot?");
-                                                                if (!confirmed) return;
                                                                 onRemoveAttachment?.(image);
                                                             }}
                                                         >
@@ -1323,6 +1321,8 @@ export default function App() {
     const [confirmPassword, setConfirmPassword] = useState("");
     const [isDetailsEditing, setIsDetailsEditing] = useState(false);
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+    const [isAttachmentDeleteModalOpen, setIsAttachmentDeleteModalOpen] = useState(false);
+    const [attachmentToDelete, setAttachmentToDelete] = useState(null);
     const [selectedTradeForDetails, setSelectedTradeForDetails] = useState(null);
     const [isDetailsOpen, setIsDetailsOpen] = useState(false);
     const [attachmentsBySection, setAttachmentsBySection] = useState({
@@ -1995,10 +1995,19 @@ export default function App() {
         }
     }
 
+    async function confirmDeleteAttachment() {
+        if (!attachmentToDelete) return;
+        await removeAttachment(attachmentToDelete);
+        setIsAttachmentDeleteModalOpen(false);
+        setAttachmentToDelete(null);
+    }
+
     function openTradeDetails(trade) {
         setIsDetailsEditing(false);
         cancelEdit();
         setIsDeleteModalOpen(false);
+        setIsAttachmentDeleteModalOpen(false);
+        setAttachmentToDelete(null);
         closeAttachModal();
         setLightboxUrl("");
         setSelectedTradeForDetails(trade);
@@ -2010,6 +2019,8 @@ export default function App() {
         setSelectedTradeForDetails(null);
         setIsDetailsEditing(false);
         setIsDeleteModalOpen(false);
+        setIsAttachmentDeleteModalOpen(false);
+        setAttachmentToDelete(null);
         setLightboxUrl("");
         closeAttachModal();
         resetAttachments();
@@ -2484,6 +2495,18 @@ export default function App() {
         window.addEventListener("keydown", handleKeydown);
         return () => window.removeEventListener("keydown", handleKeydown);
     }, [isDeleteModalOpen]);
+
+    useEffect(() => {
+        if (!isAttachmentDeleteModalOpen) return undefined;
+        const handleKeydown = (event) => {
+            if (event.key === "Escape") {
+                setIsAttachmentDeleteModalOpen(false);
+                setAttachmentToDelete(null);
+            }
+        };
+        window.addEventListener("keydown", handleKeydown);
+        return () => window.removeEventListener("keydown", handleKeydown);
+    }, [isAttachmentDeleteModalOpen]);
 
     const emDash = "\u2014";
     const formatRValue = (value) => {
@@ -3060,7 +3083,10 @@ export default function App() {
                                 attachmentsBySection={attachmentsBySection}
                                 onPreview={(url) => setLightboxUrl(url)}
                                 onUpdateTimeframe={updateAttachmentTimeframe}
-                                onRemoveAttachment={removeAttachment}
+                                onRemoveAttachment={(attachment) => {
+                                    setAttachmentToDelete(attachment);
+                                    setIsAttachmentDeleteModalOpen(true);
+                                }}
                                 panelRef={rightPanelRef}
                                 otherPanelRef={leftPanelRef}
                                 isAttachModalOpen={isAttachModalOpen}
@@ -3185,6 +3211,46 @@ export default function App() {
                                                 type="button"
                                                 className="btn btn-danger"
                                                 onClick={confirmDeleteTrade}
+                                            >
+                                                Delete
+                                            </button>
+                                        </div>
+                                    </div>
+                                </>
+                            )}
+                            {isAttachmentDeleteModalOpen && (
+                                <>
+                                    <div
+                                        className="modal-backdrop"
+                                        onClick={() => {
+                                            setIsAttachmentDeleteModalOpen(false);
+                                            setAttachmentToDelete(null);
+                                        }}
+                                    />
+                                    <div
+                                        className="modal"
+                                        role="dialog"
+                                        aria-modal="true"
+                                        aria-labelledby="delete-attachment-title"
+                                        onClick={(e) => e.stopPropagation()}
+                                    >
+                                        <h3 className="modal-title" id="delete-attachment-title">Delete attachment?</h3>
+                                        <p className="modal-text">This action cannot be undone.</p>
+                                        <div className="modal-actions">
+                                            <button
+                                                type="button"
+                                                className="btn btn-ghost"
+                                                onClick={() => {
+                                                    setIsAttachmentDeleteModalOpen(false);
+                                                    setAttachmentToDelete(null);
+                                                }}
+                                            >
+                                                Cancel
+                                            </button>
+                                            <button
+                                                type="button"
+                                                className="btn btn-danger"
+                                                onClick={confirmDeleteAttachment}
                                             >
                                                 Delete
                                             </button>
