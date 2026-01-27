@@ -154,6 +154,19 @@
   background: #3b151a;
 }
 
+.risk-calc-btn {
+  background: linear-gradient(135deg, #14b8a6, #22d3ee);
+  border-color: transparent;
+  color: #041016;
+  font-weight: 600;
+  box-shadow: 0 12px 22px rgba(20, 184, 166, 0.28);
+}
+
+.risk-calc-btn:hover {
+  background: linear-gradient(135deg, #0f9f8f, #1cc2dc);
+  border-color: transparent;
+}
+
 .trade-form {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));

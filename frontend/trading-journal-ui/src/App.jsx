@@ -2897,11 +2897,11 @@ export default function App() {
                                 </div>
                                 <div className="card-header-actions">
                                     <button
-                                        className="btn btn-ghost btn-sm"
+                                        className="btn btn-sm risk-calc-btn"
                                         type="button"
                                         onClick={openRiskCalc}
                                     >
-                                        Risk Calc
+                                        Risk Calculator
                                     </button>
                                 </div>
                             </div>
