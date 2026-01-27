@@ -12,6 +12,7 @@ public interface TradeService {
 
     Trade findById(Long id);
     Trade update(Long id, String symbol, String direction, BigDecimal entryPrice, BigDecimal exitPrice, String closeReasonOverride, String manualReason, String manualDescription, BigDecimal stopLossPrice, BigDecimal takeProfitPrice, java.time.Instant closedAt, java.time.Instant createdAt);
+    Trade updateReview(Long id, String followedPlan, String mistakesText, String improvementText, Integer confidence);
     void delete(Long id);
 
 

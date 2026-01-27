@@ -46,6 +46,11 @@ public class TradeController {
             String closeReasonOverride,
             String manualReason,
             String manualDescription,
+            String followedPlan,
+            String mistakesText,
+            String improvementText,
+            Integer confidence,
+            Instant reviewUpdatedAt,
             BigDecimal stopLossPrice,
             BigDecimal takeProfitPrice,
             BigDecimal slPips,
@@ -64,6 +69,11 @@ public class TradeController {
                     t.getCloseReasonOverride(),
                     t.getManualReason(),
                     t.getManualDescription(),
+                    t.getFollowedPlan(),
+                    t.getMistakesText(),
+                    t.getImprovementText(),
+                    t.getConfidence(),
+                    t.getReviewUpdatedAt(),
                     t.getStopLossPrice(),
                     t.getTakeProfitPrice(),
                     t.getSlPips(),
@@ -74,6 +84,13 @@ public class TradeController {
             );
         }
     }
+
+    public record ReviewUpdateRequest(
+            @NotBlank @Pattern(regexp = "(?i)YES|NO|MAYBE") String followedPlan,
+            @Size(max = 2000) String mistakesText,
+            @Size(max = 2000) String improvementText,
+            @NotNull @Positive Integer confidence
+    ) {}
 
     @GetMapping
     public List<TradeResponse> all() {
@@ -98,7 +115,7 @@ public TradeResponse create(@Valid @RequestBody CreateTradeRequest req) {
     );
 }
 
-@PutMapping("/{id}")
+    @PutMapping("/{id}")
 public TradeResponse update(@PathVariable Long id, @Valid @RequestBody CreateTradeRequest req) {
     return TradeResponse.from(
             service.update(
@@ -117,6 +134,19 @@ public TradeResponse update(@PathVariable Long id, @Valid @RequestBody CreateTra
             )
     );
 }
+
+    @PatchMapping("/{id}/review")
+    public TradeResponse updateReview(@PathVariable Long id, @Valid @RequestBody ReviewUpdateRequest req) {
+        return TradeResponse.from(
+                service.updateReview(
+                        id,
+                        req.followedPlan(),
+                        req.mistakesText(),
+                        req.improvementText(),
+                        req.confidence()
+                )
+        );
+    }
     @DeleteMapping("/{id}") 
     public void delete(@PathVariable Long id) {
         service.delete(id);

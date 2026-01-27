@@ -69,7 +69,7 @@ public class TradeServiceImpl implements TradeService {
 
     @Override
     public List<Trade> myTrades() {
-        return trades.findAllByUserEmailOrderByCreatedAtDesc(currentEmail());
+        return trades.findAllByUserEmailOrderByCreatedAtDescIdDesc(currentEmail());
     }
 
     @Override
@@ -114,6 +114,24 @@ public class TradeServiceImpl implements TradeService {
         t.setCreatedAt(createdAtToUse);
         t.setClosedAt(closedAt);
 
+        return trades.save(t);
+    }
+
+    @Override
+    public Trade updateReview(Long id, String followedPlan, String mistakesText, String improvementText, Integer confidence) {
+        Trade t = findOwnedTrade(id);
+        String normalizedFollowedPlan = normalizeFollowedPlan(followedPlan);
+        if (normalizedFollowedPlan == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Followed plan is required");
+        }
+        if (confidence == null || confidence < 1 || confidence > 10) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Confidence must be between 1 and 10");
+        }
+        t.setFollowedPlan(normalizedFollowedPlan);
+        t.setMistakesText(normalizeOptionalText(mistakesText));
+        t.setImprovementText(normalizeOptionalText(improvementText));
+        t.setConfidence(confidence);
+        t.setReviewUpdatedAt(Instant.now());
         return trades.save(t);
     }
 
@@ -183,6 +201,17 @@ public class TradeServiceImpl implements TradeService {
         if (closeReasonOverride == null) return null;
         String trimmed = closeReasonOverride.trim();
         return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private String normalizeFollowedPlan(String followedPlan) {
+        if (followedPlan == null) return null;
+        String trimmed = followedPlan.trim();
+        if (trimmed.isEmpty()) return null;
+        String upper = trimmed.toUpperCase();
+        if (!upper.equals("YES") && !upper.equals("NO") && !upper.equals("MAYBE")) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Followed plan must be YES, NO, or MAYBE");
+        }
+        return upper;
     }
 
     private ManualDetails normalizeManualDetails(String closeReasonOverride, String manualReason, String manualDescription) {

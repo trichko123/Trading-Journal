@@ -26,6 +26,16 @@ public class Trade {
     private String manualReason;
     @Column(name = "manual_description", length = 500)
     private String manualDescription;
+    @Column(name = "followed_plan", length = 10)
+    private String followedPlan;
+    @Column(name = "mistakes_text", length = 2000)
+    private String mistakesText;
+    @Column(name = "improvement_text", length = 2000)
+    private String improvementText;
+    @Column(name = "confidence")
+    private Integer confidence;
+    @Column(name = "review_updated_at")
+    private Instant reviewUpdatedAt;
     private BigDecimal stopLossPrice;
     private BigDecimal takeProfitPrice;
     private BigDecimal slPips;
@@ -133,6 +143,46 @@ public class Trade {
 
     public void setManualDescription(String manualDescription) {
         this.manualDescription = manualDescription;
+    }
+
+    public String getFollowedPlan() {
+        return followedPlan;
+    }
+
+    public void setFollowedPlan(String followedPlan) {
+        this.followedPlan = followedPlan;
+    }
+
+    public String getMistakesText() {
+        return mistakesText;
+    }
+
+    public void setMistakesText(String mistakesText) {
+        this.mistakesText = mistakesText;
+    }
+
+    public String getImprovementText() {
+        return improvementText;
+    }
+
+    public void setImprovementText(String improvementText) {
+        this.improvementText = improvementText;
+    }
+
+    public Integer getConfidence() {
+        return confidence;
+    }
+
+    public void setConfidence(Integer confidence) {
+        this.confidence = confidence;
+    }
+
+    public Instant getReviewUpdatedAt() {
+        return reviewUpdatedAt;
+    }
+
+    public void setReviewUpdatedAt(Instant reviewUpdatedAt) {
+        this.reviewUpdatedAt = reviewUpdatedAt;
     }
 
     public BigDecimal getStopLossPrice() {

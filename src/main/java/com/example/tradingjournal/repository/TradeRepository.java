@@ -9,7 +9,7 @@ import java.util.Optional;
 
 @Repository
 public interface TradeRepository extends JpaRepository<Trade, Long> {
-    List<Trade> findAllByUserEmailOrderByCreatedAtDesc(String email);
+    List<Trade> findAllByUserEmailOrderByCreatedAtDescIdDesc(String email);
     Optional<Trade> findByIdAndUserEmail(Long id, String email);
 
 }
