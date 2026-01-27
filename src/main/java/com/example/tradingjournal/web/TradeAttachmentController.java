@@ -29,6 +29,7 @@ public class TradeAttachmentController {
             String contentType,
             long fileSize,
             String imageUrl,
+            String timeframe,
             Instant createdAt
     ) {
         static AttachmentResponse from(TradeAttachment attachment) {
@@ -40,9 +41,13 @@ public class TradeAttachmentController {
                     attachment.getContentType(),
                     attachment.getFileSize(),
                     "/uploads/" + attachment.getRelativePath(),
+                    attachment.getTimeframe(),
                     attachment.getCreatedAt()
             );
         }
+    }
+
+    public record AttachmentUpdateRequest(String timeframe) {
     }
 
     @PostMapping(value = "/api/trades/{tradeId}/attachments", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -68,6 +73,16 @@ public class TradeAttachmentController {
         service.delete(attachmentId);
     }
 
+    @PatchMapping("/api/attachments/{attachmentId}")
+    public AttachmentResponse updateTimeframe(
+            @PathVariable Long attachmentId,
+            @RequestBody AttachmentUpdateRequest request
+    ) {
+        String normalized = normalizeTimeframe(request == null ? null : request.timeframe());
+        TradeAttachment updated = service.updateTimeframe(attachmentId, normalized);
+        return AttachmentResponse.from(updated);
+    }
+
     private TradeAttachmentSection parseSection(String section) {
         if (section == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Section is required");
@@ -77,5 +92,19 @@ public class TradeAttachmentController {
         } catch (IllegalArgumentException ex) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid section value");
         }
+    }
+
+    private String normalizeTimeframe(String timeframe) {
+        if (timeframe == null) {
+            return null;
+        }
+        String trimmed = timeframe.trim();
+        if (trimmed.isEmpty()) {
+            return null;
+        }
+        if (trimmed.length() > 20) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Timeframe is too long");
+        }
+        return trimmed;
     }
 }

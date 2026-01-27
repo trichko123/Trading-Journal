@@ -25,7 +25,7 @@ public class CorsConfig {
                 .filter(s -> !s.isBlank())
                 .collect(Collectors.toList());
         config.setAllowedOrigins(origins);
-        config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+        config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
         config.setAllowCredentials(false); // JWT in headers => false is fine
 

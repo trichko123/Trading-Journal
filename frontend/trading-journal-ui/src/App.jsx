@@ -9,6 +9,22 @@ const API_ROOT = API_BASE.endsWith("/api") ? API_BASE.slice(0, -4) : API_BASE;
 const REFRESH_COOLDOWN_MS = 2000;
 const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
 const ALLOWED_ATTACHMENT_TYPES = ["image/png", "image/jpeg", "image/jpg", "image/webp"];
+const TIMEFRAME_OPTIONS = [
+    { value: "", label: "\u2014" },
+    { value: "1m", label: "1m" },
+    { value: "3m", label: "3m" },
+    { value: "5m", label: "5m" },
+    { value: "15m", label: "15m" },
+    { value: "30m", label: "30m" },
+    { value: "1H", label: "1H" },
+    { value: "2H", label: "2H" },
+    { value: "4H", label: "4H" },
+    { value: "8H", label: "8H" },
+    { value: "12H", label: "12H" },
+    { value: "1D", label: "1D" },
+    { value: "1W", label: "1W" },
+    { value: "1M", label: "1M" },
+];
 
 // Available currency pairs
 const CURRENCY_PAIRS = [
@@ -1029,6 +1045,8 @@ function TradeDetailsPanelRight({
     onAttach,
     attachmentsBySection,
     onPreview,
+    onUpdateTimeframe,
+    onRemoveAttachment,
     panelRef: externalPanelRef,
     otherPanelRef,
     isAttachModalOpen,
@@ -1038,6 +1056,7 @@ function TradeDetailsPanelRight({
     const [shouldRender, setShouldRender] = useState(false);
     const [isVisible, setIsVisible] = useState(false);
     const [renderTrade, setRenderTrade] = useState(trade);
+    const [isExpanded, setIsExpanded] = useState(false);
     const internalPanelRef = useRef(null);
     const panelRef = externalPanelRef || internalPanelRef;
     const closeTimeoutRef = useRef(null);
@@ -1060,6 +1079,12 @@ function TradeDetailsPanelRight({
             setRenderTrade(trade);
         }
     }, [trade]);
+
+    useEffect(() => {
+        if (!open) {
+            setIsExpanded(false);
+        }
+    }, [open]);
 
     useEffect(() => {
         if (open) {
@@ -1140,7 +1165,9 @@ function TradeDetailsPanelRight({
             />
             <div
                 ref={panelRef}
-                className={`drawer drawer-right drawer-panel drawer-animated${isVisible ? " is-open" : ""}`}
+                className={`drawer drawer-right drawer-panel drawer-panel--media drawer-animated${
+                    isVisible ? " is-open" : ""
+                }${isExpanded ? " is-expanded" : ""}`}
                 onClick={(e) => e.stopPropagation()}
                 role="dialog"
                 aria-modal={isMobile ? "true" : undefined}
@@ -1154,69 +1181,107 @@ function TradeDetailsPanelRight({
                                 {titleValue}
                             </h3>
                         </div>
-                        <button
-                            type="button"
-                            className="btn btn-ghost btn-sm drawer-close"
-                            aria-label="Close media panel"
-                            onClick={onClose}
-                        >
-                            {"\u00d7"}
-                        </button>
+                        <div className="drawer-header-actions">
+                            {!isMobile && (
+                                <button
+                                    type="button"
+                                    className="btn btn-ghost btn-sm"
+                                    aria-label={isExpanded ? "Collapse media panel" : "Expand media panel"}
+                                    onClick={() => setIsExpanded((prev) => !prev)}
+                                >
+                                    {isExpanded ? "Collapse" : "Expand"}
+                                </button>
+                            )}
+                            <button
+                                type="button"
+                                className="btn btn-ghost btn-sm drawer-close"
+                                aria-label="Close media panel"
+                                onClick={onClose}
+                            >
+                                {"\u00d7"}
+                            </button>
+                        </div>
                     </div>
                     <div className="drawer-sections">
                         {sections.map((section) => {
                             const images = attachmentsBySection?.[section.key] || [];
                             return (
                             <div className="drawer-section" key={section.key}>
-                                <h4 className="drawer-section-title">{section.title}</h4>
+                                <div className="drawer-section-head">
+                                    <h4 className="drawer-section-title">{section.title}</h4>
+                                    <button
+                                        type="button"
+                                        className="btn btn-ghost btn-sm"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            onAttach?.(section.key);
+                                        }}
+                                        onMouseDown={(e) => e.stopPropagation()}
+                                    >
+                                        Attach
+                                    </button>
+                                </div>
                                 <div className="drawer-section-body">
                                     {images.length ? (
-                                        <>
-                                        <div className="screenshot-grid">
+                                        <div className="screenshot-stack">
                                             {images.map((image, index) => (
-                                                <button
-                                                    key={`${section.key}-${index}`}
-                                                    type="button"
-                                                    className="screenshot-thumb"
-                                                    aria-label={`${section.title} screenshot ${index + 1}`}
-                                                    onClick={() => {
-                                                        if (image.imageUrl) {
-                                                            onPreview?.(image.imageUrl);
-                                                        }
-                                                    }}
-                                                >
-                                                    <img src={image.imageUrl} alt={image.originalFilename || ""} />
-                                                </button>
+                                                <div className="screenshot-card" key={image.id ?? `${section.key}-${index}`}>
+                                                    <button
+                                                        type="button"
+                                                        className="screenshot-featured"
+                                                        aria-label={`${section.title} screenshot ${index + 1}`}
+                                                        onClick={() => {
+                                                            if (image.imageUrl) {
+                                                                onPreview?.(image.imageUrl);
+                                                            }
+                                                        }}
+                                                    >
+                                                        {image.timeframe && (
+                                                            <span className="screenshot-timeframe">
+                                                                {image.timeframe}
+                                                            </span>
+                                                        )}
+                                                        <img src={image.imageUrl} alt={image.originalFilename || ""} />
+                                                    </button>
+                                                    <div className="screenshot-controls">
+                                                        <label className="screenshot-label" htmlFor={`tf-${image.id}`}>
+                                                            Timeframe
+                                                        </label>
+                                                        <select
+                                                            id={`tf-${image.id}`}
+                                                            className="input input-compact"
+                                                            value={image.timeframe ?? ""}
+                                                            onChange={(e) => {
+                                                                onUpdateTimeframe?.(
+                                                                    image.id,
+                                                                    e.target.value ? e.target.value : null
+                                                                );
+                                                            }}
+                                                        >
+                                                            {TIMEFRAME_OPTIONS.map((option) => (
+                                                                <option key={option.value} value={option.value}>
+                                                                    {option.label}
+                                                                </option>
+                                                            ))}
+                                                        </select>
+                                                        <button
+                                                            type="button"
+                                                            className="btn btn-ghost btn-sm screenshot-remove"
+                                                            onClick={() => {
+                                                                const confirmed = window.confirm("Remove this screenshot?");
+                                                                if (!confirmed) return;
+                                                                onRemoveAttachment?.(image);
+                                                            }}
+                                                        >
+                                                            Remove
+                                                        </button>
+                                                    </div>
+                                                </div>
                                             ))}
                                         </div>
-                                        <div className="screenshot-actions">
-                                            <button
-                                                type="button"
-                                                className="btn btn-ghost btn-sm"
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    onAttach?.(section.key);
-                                                }}
-                                                onMouseDown={(e) => e.stopPropagation()}
-                                            >
-                                                Attach
-                                            </button>
-                                        </div>
-                                        </>
                                     ) : (
-                                        <div className="screenshot-placeholder screenshot-placeholder--row">
+                                        <div className="screenshot-placeholder">
                                             <span>No images yet</span>
-                                            <button
-                                                type="button"
-                                                className="btn btn-ghost btn-sm"
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    onAttach?.(section.key);
-                                                }}
-                                                onMouseDown={(e) => e.stopPropagation()}
-                                            >
-                                                Attach
-                                            </button>
                                         </div>
                                     )}
                                 </div>
@@ -1862,6 +1927,71 @@ export default function App() {
             setAttachError(String(err).replace(/^Error:\s*/, ""));
         } finally {
             setIsUploadingAttachment(false);
+        }
+    }
+
+    async function updateAttachmentTimeframe(attachmentId, timeframe) {
+        if (!attachmentId) return;
+        try {
+            const res = await fetch(`${API}/attachments/${attachmentId}`, {
+                method: "PATCH",
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify({ timeframe }),
+            });
+            if (!res.ok) {
+                const txt = await res.text();
+                throw new Error(`Update attachment failed (${res.status}): ${txt}`);
+            }
+            const updatedRaw = await res.json();
+            const updated = {
+                ...updatedRaw,
+                imageUrl: updatedRaw.imageUrl?.startsWith("/")
+                    ? `${API_ROOT}${updatedRaw.imageUrl}`
+                    : updatedRaw.imageUrl,
+            };
+            setAttachmentsBySection((prev) => {
+                const next = {
+                    PREPARATION: [...(prev.PREPARATION || [])],
+                    ENTRY: [...(prev.ENTRY || [])],
+                    EXIT: [...(prev.EXIT || [])],
+                };
+                Object.keys(next).forEach((section) => {
+                    next[section] = next[section].map((item) => (item.id === updated.id ? updated : item));
+                });
+                return next;
+            });
+        } catch (err) {
+            setError(String(err));
+        }
+    }
+
+    async function removeAttachment(attachment) {
+        if (!attachment?.id) return;
+        try {
+            const res = await fetch(`${API}/attachments/${attachment.id}`, {
+                method: "DELETE",
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            if (!res.ok) {
+                const txt = await res.text();
+                throw new Error(`Delete attachment failed (${res.status}): ${txt}`);
+            }
+            setAttachmentsBySection((prev) => {
+                const next = {
+                    PREPARATION: [...(prev.PREPARATION || [])],
+                    ENTRY: [...(prev.ENTRY || [])],
+                    EXIT: [...(prev.EXIT || [])],
+                };
+                Object.keys(next).forEach((section) => {
+                    next[section] = next[section].filter((item) => item.id !== attachment.id);
+                });
+                return next;
+            });
+        } catch (err) {
+            setError(String(err));
         }
     }
 
@@ -2929,6 +3059,8 @@ export default function App() {
                                 onAttach={openAttachModal}
                                 attachmentsBySection={attachmentsBySection}
                                 onPreview={(url) => setLightboxUrl(url)}
+                                onUpdateTimeframe={updateAttachmentTimeframe}
+                                onRemoveAttachment={removeAttachment}
                                 panelRef={rightPanelRef}
                                 otherPanelRef={leftPanelRef}
                                 isAttachModalOpen={isAttachModalOpen}
