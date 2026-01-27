@@ -1426,6 +1426,7 @@ export default function App() {
     const [riskCalcSymbol, setRiskCalcSymbol] = useState(symbol);
     const [riskCalcEntryPrice, setRiskCalcEntryPrice] = useState("");
     const [riskCalcStopLossPrice, setRiskCalcStopLossPrice] = useState("");
+    const [riskCalcConversionRate, setRiskCalcConversionRate] = useState("");
 
     const [error, setError] = useState("");
     const [isLoading, setIsLoading] = useState(false);
@@ -2700,9 +2701,11 @@ export default function App() {
         entryPrice: riskCalcEntryPrice,
         stopLossPrice: riskCalcStopLossPrice,
         accountCurrency: riskCalcAccountCurrency,
+        conversionRate: riskCalcConversionRate,
     }), [
         riskCalcAccountCurrency,
         riskCalcBalance,
+        riskCalcConversionRate,
         riskCalcEntryPrice,
         riskCalcRiskPercent,
         riskCalcStopLossPrice,
@@ -2736,6 +2739,34 @@ export default function App() {
         const decimals = pipSize === 0.01 ? 3 : 5;
         return Number(value).toFixed(decimals);
     };
+    const [copiedKey, setCopiedKey] = useState("");
+    const copyTimeoutRef = useRef(null);
+    const copyToClipboard = (value) => {
+        if (!navigator?.clipboard?.writeText) return;
+        navigator.clipboard.writeText(String(value));
+    };
+    const handleCopy = (key, value) => {
+        copyToClipboard(value);
+        setCopiedKey(key);
+        if (copyTimeoutRef.current) {
+            clearTimeout(copyTimeoutRef.current);
+        }
+        copyTimeoutRef.current = setTimeout(() => {
+            setCopiedKey("");
+        }, 1200);
+    };
+    useEffect(() => () => {
+        if (copyTimeoutRef.current) {
+            clearTimeout(copyTimeoutRef.current);
+        }
+    }, []);
+    const conversionPairLabel = riskCalcResult.needsConversion && riskCalcResult.quoteCurrency && riskCalcAccountCurrency
+        ? `${riskCalcAccountCurrency}${riskCalcResult.quoteCurrency}`
+        : "";
+    const conversionHelper = riskCalcResult.needsConversion && riskCalcResult.quoteCurrency && riskCalcAccountCurrency
+        ? `Needed to convert ${riskCalcResult.quoteCurrency} \u2192 ${riskCalcAccountCurrency} for accurate pip value. `
+            + `Enter ${conversionPairLabel} (${riskCalcResult.quoteCurrency} per 1 ${riskCalcAccountCurrency}).`
+        : "";
     return (
         <div className="app">
             <div className="stack">
@@ -3419,64 +3450,135 @@ export default function App() {
                                                     step="0.00001"
                                                 />
                                             </label>
+                                            {riskCalcResult.needsConversion && (
+                                                <label className="field risk-calc-full">
+                                                    <span>Conversion rate</span>
+                                                    <input
+                                                        className="input"
+                                                        value={riskCalcConversionRate}
+                                                        onChange={(e) => setRiskCalcConversionRate(e.target.value)}
+                                                        placeholder={conversionPairLabel || "Conversion rate"}
+                                                        type="number"
+                                                        min="0"
+                                                        step="0.00001"
+                                                    />
+                                                    {conversionHelper && (
+                                                        <span className="risk-calc-helper">{conversionHelper}</span>
+                                                    )}
+                                                    {riskCalcResult.baseValid && !riskCalcResult.conversionRateValid && (
+                                                        <span className="risk-calc-error">
+                                                            Enter a valid {conversionPairLabel || "conversion rate"}.
+                                                        </span>
+                                                    )}
+                                                </label>
+                                            )}
                                         </div>
                                         <div className="risk-calc-outputs">
                                             <div className="risk-calc-output-row">
                                                 <span>Amount at risk</span>
                                                 <span className={`risk-calc-output-value${riskCalcResult.isValid ? "" : " is-muted"}`}>
-                                                    {riskCalcResult.isValid
+                                                    {riskCalcResult.baseValid
                                                         ? `${riskCalcAccountCurrency} ${formatCalcNumber(riskCalcResult.riskAmount, 2)}`
                                                         : emDash}
                                                 </span>
                                             </div>
                                             <div className="risk-calc-output-row">
                                                 <span>Stop loss distance</span>
-                                                <span className={`risk-calc-output-value${riskCalcResult.isValid ? "" : " is-muted"}`}>
-                                                    {riskCalcResult.isValid
+                                                <span className={`risk-calc-output-value${riskCalcResult.baseValid ? "" : " is-muted"}`}>
+                                                    {riskCalcResult.baseValid
                                                         ? `${formatCalcNumber(riskCalcResult.slPips, 1)} pips`
                                                         : emDash}
                                                 </span>
                                             </div>
                                             <div className="risk-calc-output-row">
                                                 <span>Position size (units)</span>
-                                                <span className={`risk-calc-output-value${riskCalcResult.isValid ? "" : " is-muted"}`}>
-                                                    {riskCalcResult.isValid ? formatCalcInteger(riskCalcResult.units) : emDash}
+                                                <span className="risk-calc-output-value-wrap">
+                                                    {copiedKey === "units" && <span className="copy-confirm">Copied</span>}
+                                                    <button
+                                                        type="button"
+                                                        className="btn btn-ghost btn-sm copy-btn"
+                                                        aria-label="Copy position size"
+                                                        onClick={() => handleCopy("units", formatCalcInteger(riskCalcResult.units))}
+                                                        disabled={riskCalcResult.units == null}
+                                                    >
+                                                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                                                            <rect x="9" y="9" width="10" height="10" rx="2" />
+                                                            <path d="M7 15H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v1" />
+                                                        </svg>
+                                                    </button>
+                                                    <span className={`risk-calc-output-value${riskCalcResult.units != null ? "" : " is-muted"}`}>
+                                                        {riskCalcResult.units != null ? formatCalcInteger(riskCalcResult.units) : emDash}
+                                                    </span>
                                                 </span>
                                             </div>
                                             <div className="risk-calc-output-row">
                                                 <span>Standard lots</span>
-                                                <span className={`risk-calc-output-value${riskCalcResult.isValid ? "" : " is-muted"}`}>
-                                                    {riskCalcResult.isValid ? formatCalcNumber(riskCalcResult.lots, 2) : emDash}
-                                                </span>
-                                            </div>
-                                            <div className="risk-calc-output-row">
-                                                <span>Micro lots</span>
-                                                <span className={`risk-calc-output-value${riskCalcResult.isValid ? "" : " is-muted"}`}>
-                                                    {riskCalcResult.isValid ? formatCalcNumber(riskCalcResult.microLots, 2) : emDash}
+                                                <span className="risk-calc-output-value-wrap">
+                                                    {copiedKey === "lots" && <span className="copy-confirm">Copied</span>}
+                                                    <button
+                                                        type="button"
+                                                        className="btn btn-ghost btn-sm copy-btn"
+                                                        aria-label="Copy standard lots"
+                                                        onClick={() => handleCopy("lots", formatCalcNumber(riskCalcResult.lots, 2))}
+                                                        disabled={riskCalcResult.lots == null}
+                                                    >
+                                                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                                                            <rect x="9" y="9" width="10" height="10" rx="2" />
+                                                            <path d="M7 15H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v1" />
+                                                        </svg>
+                                                    </button>
+                                                    <span className={`risk-calc-output-value${riskCalcResult.lots != null ? "" : " is-muted"}`}>
+                                                        {riskCalcResult.lots != null ? formatCalcNumber(riskCalcResult.lots, 2) : emDash}
+                                                    </span>
                                                 </span>
                                             </div>
                                             <div className="risk-calc-output-row">
                                                 <span>2R target</span>
-                                                <span className={`risk-calc-output-value${riskCalcResult.isValid ? "" : " is-muted"}`}>
-                                                    {riskCalcResult.isValid
-                                                        ? formatCalcPrice(riskCalcResult.target2R, riskCalcResult.pipSize)
-                                                        : emDash}
+                                                <span className="risk-calc-output-value-wrap">
+                                                    {copiedKey === "target2R" && <span className="copy-confirm">Copied</span>}
+                                                    <button
+                                                        type="button"
+                                                        className="btn btn-ghost btn-sm copy-btn"
+                                                        aria-label="Copy 2R target"
+                                                        onClick={() => handleCopy("target2R", formatCalcPrice(riskCalcResult.target2R, riskCalcResult.pipSize))}
+                                                        disabled={!riskCalcResult.baseValid}
+                                                    >
+                                                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                                                            <rect x="9" y="9" width="10" height="10" rx="2" />
+                                                            <path d="M7 15H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v1" />
+                                                        </svg>
+                                                    </button>
+                                                    <span className={`risk-calc-output-value${riskCalcResult.baseValid ? "" : " is-muted"}`}>
+                                                        {riskCalcResult.baseValid
+                                                            ? formatCalcPrice(riskCalcResult.target2R, riskCalcResult.pipSize)
+                                                            : emDash}
+                                                    </span>
                                                 </span>
                                             </div>
                                             <div className="risk-calc-output-row">
                                                 <span>3R target</span>
-                                                <span className={`risk-calc-output-value${riskCalcResult.isValid ? "" : " is-muted"}`}>
-                                                    {riskCalcResult.isValid
-                                                        ? formatCalcPrice(riskCalcResult.target3R, riskCalcResult.pipSize)
-                                                        : emDash}
+                                                <span className="risk-calc-output-value-wrap">
+                                                    {copiedKey === "target3R" && <span className="copy-confirm">Copied</span>}
+                                                    <button
+                                                        type="button"
+                                                        className="btn btn-ghost btn-sm copy-btn"
+                                                        aria-label="Copy 3R target"
+                                                        onClick={() => handleCopy("target3R", formatCalcPrice(riskCalcResult.target3R, riskCalcResult.pipSize))}
+                                                        disabled={!riskCalcResult.baseValid}
+                                                    >
+                                                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                                                            <rect x="9" y="9" width="10" height="10" rx="2" />
+                                                            <path d="M7 15H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v1" />
+                                                        </svg>
+                                                    </button>
+                                                    <span className={`risk-calc-output-value${riskCalcResult.baseValid ? "" : " is-muted"}`}>
+                                                        {riskCalcResult.baseValid
+                                                            ? formatCalcPrice(riskCalcResult.target3R, riskCalcResult.pipSize)
+                                                            : emDash}
+                                                    </span>
                                                 </span>
                                             </div>
                                         </div>
-                                        {riskCalcResult.isValid && riskCalcResult.isCrossCurrency && (
-                                            <p className="risk-calc-warning">
-                                                Cross-currency conversion not supported yet (approx).
-                                            </p>
-                                        )}
                                     </div>
                                 </>
                             )}
