@@ -85,6 +85,14 @@ public class TradeAttachmentServiceImpl implements TradeAttachmentService {
     }
 
     @Override
+    public TradeAttachment updateTimeframe(Long attachmentId, String timeframe) {
+        TradeAttachment attachment = attachments.findByIdAndTradeUserEmail(attachmentId, currentEmail())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Attachment not found"));
+        attachment.setTimeframe(timeframe);
+        return attachments.save(attachment);
+    }
+
+    @Override
     public void delete(Long attachmentId) {
         TradeAttachment attachment = attachments.findByIdAndTradeUserEmail(attachmentId, currentEmail())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Attachment not found"));

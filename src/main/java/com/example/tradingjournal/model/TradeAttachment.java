@@ -31,6 +31,9 @@ public class TradeAttachment {
     @Column(name = "relative_path", nullable = false, length = 500)
     private String relativePath;
 
+    @Column(name = "timeframe", length = 20)
+    private String timeframe;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -84,6 +87,14 @@ public class TradeAttachment {
 
     public void setRelativePath(String relativePath) {
         this.relativePath = relativePath;
+    }
+
+    public String getTimeframe() {
+        return timeframe;
+    }
+
+    public void setTimeframe(String timeframe) {
+        this.timeframe = timeframe;
     }
 
     public Instant getCreatedAt() {
