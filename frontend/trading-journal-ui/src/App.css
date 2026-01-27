@@ -34,6 +34,12 @@
   margin-bottom: 16px;
 }
 
+.card-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .table-header-actions {
   display: flex;
   align-items: center;
@@ -146,6 +152,19 @@
 
 .btn-danger:hover {
   background: #3b151a;
+}
+
+.risk-calc-btn {
+  background: linear-gradient(135deg, #14b8a6, #22d3ee);
+  border-color: transparent;
+  color: #041016;
+  font-weight: 600;
+  box-shadow: 0 12px 22px rgba(20, 184, 166, 0.28);
+}
+
+.risk-calc-btn:hover {
+  background: linear-gradient(135deg, #0f9f8f, #1cc2dc);
+  border-color: transparent;
 }
 
 .trade-form {
@@ -629,6 +648,17 @@
   z-index: 90;
 }
 
+.modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.modal-close {
+  align-self: flex-start;
+}
+
 .modal-title {
   margin: 0 0 6px;
   font-size: 20px;
@@ -645,6 +675,101 @@
   display: flex;
   justify-content: flex-end;
   gap: 10px;
+}
+
+.risk-calc-modal {
+  width: min(560px, 92vw);
+}
+
+.risk-calc-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 16px;
+  margin-top: 6px;
+}
+
+.risk-calc-full {
+  grid-column: 1 / -1;
+}
+
+.risk-calc-helper {
+  display: block;
+  margin-top: 6px;
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.risk-calc-error {
+  display: block;
+  margin-top: 6px;
+  font-size: 12px;
+  color: #fca5a5;
+}
+
+.risk-calc-outputs {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid #23283b;
+  display: grid;
+  gap: 8px;
+}
+
+.risk-calc-output-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+  color: #9aa3b2;
+}
+
+.risk-calc-output-value-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.risk-calc-output-value {
+  font-weight: 600;
+  color: #e7ebf2;
+  font-variant-numeric: tabular-nums;
+}
+
+.risk-calc-output-value.is-muted {
+  color: #64748b;
+  font-weight: 500;
+}
+
+.copy-btn {
+  padding: 4px;
+  min-width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.copy-btn svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.copy-confirm {
+  font-size: 11px;
+  color: #7dd3fc;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.risk-calc-warning {
+  margin: 12px 0 0;
+  font-size: 12px;
+  color: #fbbf24;
 }
 
 .review-modal {
@@ -1225,6 +1350,10 @@
 
 @media (max-width: 640px) {
   .trade-form {
+    grid-template-columns: 1fr;
+  }
+
+  .risk-calc-grid {
     grid-template-columns: 1fr;
   }
 
