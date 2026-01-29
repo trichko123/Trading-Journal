@@ -1,3 +1,5 @@
+import { getInstrument, getTickSize, getUnitsPerLot } from "../constants/instruments";
+
 export function calculateRiskPosition({
     accountBalance,
     riskPercent,
@@ -6,6 +8,7 @@ export function calculateRiskPosition({
     stopLossPrice,
     accountCurrency,
     conversionRate,
+    contractSizeOverride,
 }) {
     const balance = Number(accountBalance);
     const riskPct = Number(riskPercent);
@@ -13,9 +16,15 @@ export function calculateRiskPosition({
     const stopLoss = Number(stopLossPrice);
 
     const symbolValue = symbol?.toUpperCase() || "";
-    const baseCurrency = symbolValue.length >= 6 ? symbolValue.slice(0, 3) : "";
-    const quoteCurrency = symbolValue.length >= 6 ? symbolValue.slice(3) : "";
-    const pipSize = symbolValue.endsWith("JPY") ? 0.01 : 0.0001;
+    const instrument = getInstrument(symbolValue);
+    const baseCurrency = instrument?.base || (symbolValue.length >= 6 ? symbolValue.slice(0, 3) : "");
+    const quoteCurrency = instrument?.quote || (symbolValue.length >= 6 ? symbolValue.slice(3) : "");
+    const pipSize = getTickSize(symbolValue);
+    const isXau = symbolValue === "XAUUSD";
+    const overrideNum = Number(contractSizeOverride);
+    const unitsPerLot = isXau
+        ? (Number.isFinite(overrideNum) && overrideNum > 0 ? overrideNum : 100)
+        : getUnitsPerLot(symbolValue);
     const slDistance = Math.abs(entry - stopLoss);
     const slPipsRaw = slDistance / pipSize;
     const direction = entry > stopLoss ? "LONG" : "SHORT";
@@ -53,7 +62,7 @@ export function calculateRiskPosition({
     const units = baseValid && conversionRateValid && pipValuePerUnitAcc
         ? riskAmount / (slPipsRaw * pipValuePerUnitAcc)
         : null;
-    const lots = units != null ? units / 100000 : null;
+    const lots = units != null ? units / unitsPerLot : null;
     const target2R = Number.isFinite(entry) && Number.isFinite(slDistance)
         ? (direction === "LONG" ? entry + 2 * slDistance : entry - 2 * slDistance)
         : null;

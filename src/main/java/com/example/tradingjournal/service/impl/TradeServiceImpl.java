@@ -307,7 +307,14 @@ public class TradeServiceImpl implements TradeService {
     }
 
     private BigDecimal pipSizeForSymbol(String symbol) {
-        if (symbol != null && symbol.trim().toUpperCase().endsWith("JPY")) {
+        if (symbol == null) {
+            return new BigDecimal("0.0001");
+        }
+        String normalized = symbol.trim().toUpperCase();
+        if ("XAUUSD".equals(normalized)) {
+            return new BigDecimal("0.01");
+        }
+        if (normalized.endsWith("JPY")) {
             return new BigDecimal("0.01");
         }
         return new BigDecimal("0.0001");
