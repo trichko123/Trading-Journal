@@ -28,6 +28,26 @@ const TIMEFRAME_OPTIONS = [
     { value: "1M", label: "1M" },
 ];
 const ACCOUNT_CURRENCIES = ["USD", "EUR", "GBP", "CHF", "JPY"];
+const DEFAULT_PRICE_DECIMALS = 5;
+
+function getPriceDecimals(symbol) {
+    if (!symbol) return DEFAULT_PRICE_DECIMALS;
+    const normalized = String(symbol).trim().toUpperCase();
+    if (normalized === "XAUUSD") return 2;
+    if (normalized.endsWith("JPY")) return 3;
+    return DEFAULT_PRICE_DECIMALS;
+}
+
+function getPriceStep(symbol) {
+    const decimals = getPriceDecimals(symbol);
+    return (1 / 10 ** decimals).toFixed(decimals);
+}
+
+function formatPriceValue(value, symbol) {
+    const num = Number(value);
+    if (!Number.isFinite(num)) return null;
+    return num.toFixed(getPriceDecimals(symbol));
+}
 
 const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 
@@ -161,20 +181,17 @@ function TradeDetailsPanelLeft({
     }, [open, onClose]);
 
     const emDash = "\u2014";
-    const getPipSizeForSymbol = (symbol) => getTickSize(symbol);
     const deriveCloseReasonForPrices = ({ symbol, exitPrice, takeProfitPrice, stopLossPrice, entryPrice }) => {
         const exit = Number(exitPrice);
         if (!Number.isFinite(exit)) return "";
-        const pipSize = getPipSizeForSymbol(symbol);
-        const tpTolerance = 2 * pipSize;
-        const breakevenTolerance = 3 * pipSize;
+        const priceTolerance = Number(getPriceStep(symbol));
         const tp = takeProfitPrice == null ? null : Number(takeProfitPrice);
         const sl = stopLossPrice == null ? null : Number(stopLossPrice);
         const entry = entryPrice == null ? null : Number(entryPrice);
 
-        if (tp != null && Number.isFinite(tp) && Math.abs(exit - tp) <= tpTolerance) return "TP";
-        if (sl != null && Number.isFinite(sl) && Math.abs(exit - sl) <= tpTolerance) return "SL";
-        if (entry != null && Number.isFinite(entry) && Math.abs(exit - entry) <= breakevenTolerance) return "BreakEven";
+        if (tp != null && Number.isFinite(tp) && Math.abs(exit - tp) <= priceTolerance) return "TP";
+        if (sl != null && Number.isFinite(sl) && Math.abs(exit - sl) <= priceTolerance) return "SL";
+        if (entry != null && Number.isFinite(entry) && Math.abs(exit - entry) <= priceTolerance) return "BreakEven";
         return "Manual";
     };
     const getCloseReason = (t) => {
@@ -449,7 +466,7 @@ function TradeDetailsPanelLeft({
                                                     }}
                                                     placeholder="Entry price"
                                                     type="number"
-                                                    step="0.00001"
+                                                    step={getPriceStep(editSymbol)}
                                                     min="0"
                                                 />
                                             }
@@ -482,14 +499,16 @@ function TradeDetailsPanelLeft({
                                                         }}
                                                         placeholder="Exit price"
                                                         type="number"
-                                                        step="0.00001"
+                                                        step={getPriceStep(editSymbol)}
                                                         min="0"
                                                     />
                                                 }
                                             />
                                         ) : (
                                             (() => {
-                                                const exitRow = formatRowValue(activeTrade.exitPrice);
+                                                const exitRow = formatRowValue(
+                                                    isClosed ? formatPriceValue(activeTrade.exitPrice, activeTrade.symbol) : null
+                                                );
                                                 return <DetailRow label="Exit" value={exitRow.displayValue} isMuted={exitRow.isMuted} />;
                                             })()
                                         )}
@@ -520,7 +539,7 @@ function TradeDetailsPanelLeft({
                                                     }}
                                                     placeholder="Stop loss"
                                                     type="number"
-                                                    step="0.00001"
+                                                    step={getPriceStep(editSymbol)}
                                                     min="0"
                                                 />
                                             }
@@ -552,7 +571,7 @@ function TradeDetailsPanelLeft({
                                                     }}
                                                     placeholder="Take profit"
                                                     type="number"
-                                                    step="0.00001"
+                                                    step={getPriceStep(editSymbol)}
                                                     min="0"
                                                 />
                                             }
@@ -563,10 +582,12 @@ function TradeDetailsPanelLeft({
                                         {(() => {
                                             const symbolRow = formatRowValue(formatSymbol(activeTrade.symbol));
                                             const directionRow = formatRowValue(activeTrade.direction);
-                                            const entryRow = formatRowValue(activeTrade.entryPrice);
-                                            const exitRow = formatRowValue(activeTrade.exitPrice);
-                                            const slRow = formatRowValue(activeTrade.stopLossPrice);
-                                            const tpRow = formatRowValue(activeTrade.takeProfitPrice);
+                                            const entryRow = formatRowValue(formatPriceValue(activeTrade.entryPrice, activeTrade.symbol));
+                                            const exitRow = formatRowValue(
+                                                isClosed ? formatPriceValue(activeTrade.exitPrice, activeTrade.symbol) : null
+                                            );
+                                            const slRow = formatRowValue(formatPriceValue(activeTrade.stopLossPrice, activeTrade.symbol));
+                                            const tpRow = formatRowValue(formatPriceValue(activeTrade.takeProfitPrice, activeTrade.symbol));
                                             return (
                                                 <>
                                                     <DetailRow label="Symbol" value={symbolRow.displayValue} isMuted={symbolRow.isMuted} />
@@ -593,7 +614,7 @@ function TradeDetailsPanelLeft({
                                                                     }}
                                                                     placeholder="Exit price"
                                                                     type="number"
-                                                                    step="0.00001"
+                                                                    step={getPriceStep(activeTrade.symbol)}
                                                                     min="0"
                                                                 />
                                                             ) : (
@@ -2776,9 +2797,7 @@ export default function App() {
     };
     const formatCalcPrice = (value, symbolValue) => {
         if (!Number.isFinite(value)) return emDash;
-        const instrument = getInstrument(symbolValue);
-        const decimals = instrument?.value === "XAUUSD" ? 2 : (getTickSize(symbolValue) === 0.01 ? 3 : 5);
-        return Number(value).toFixed(decimals);
+        return Number(value).toFixed(getPriceDecimals(symbolValue));
     };
     const [copiedKey, setCopiedKey] = useState("");
     const copyTimeoutRef = useRef(null);
@@ -2972,7 +2991,7 @@ export default function App() {
                                         onChange={(e) => setEntryPrice(e.target.value)}
                                         placeholder="Entry price"
                                         type="number"
-                                        step="0.00001"
+                                        step={getPriceStep(symbol)}
                                         min="0"
                                     />
                                 </label>
@@ -2984,7 +3003,7 @@ export default function App() {
                                         onChange={(e) => setStopLossPrice(e.target.value)}
                                         placeholder="Stop loss"
                                         type="number"
-                                        step="0.00001"
+                                        step={getPriceStep(symbol)}
                                         min="0"
                                     />
                                 </label>
@@ -2996,7 +3015,7 @@ export default function App() {
                                         onChange={(e) => setTakeProfitPrice(e.target.value)}
                                         placeholder="Take profit"
                                         type="number"
-                                        step="0.00001"
+                                        step={getPriceStep(symbol)}
                                         min="0"
                                     />
                                 </label>
@@ -3305,8 +3324,10 @@ export default function App() {
                                                             <span className="status-pill status-pill--open">OPEN</span>
                                                         )}
                                                     </td>
-                                                    <td className="num">{t.entryPrice ?? "-"}</td>
-                                                    <td className="num">{t.exitPrice ?? "\u2014"}</td>
+                                                    <td className="num">{formatPriceValue(t.entryPrice, t.symbol) ?? "-"}</td>
+                                                    <td className="num">
+                                                        {t.closedAt ? (formatPriceValue(t.exitPrice, t.symbol) ?? "\u2014") : "\u2014"}
+                                                    </td>
                                                     <td className="num">
                                                         <span className={getOutcomeClass(t)}>{formatOutcome(t)}</span>
                                                     </td>
@@ -3512,7 +3533,7 @@ export default function App() {
                                                     placeholder="Entry"
                                                     type="number"
                                                     min="0"
-                                                    step="0.00001"
+                                                    step={getPriceStep(riskCalcSymbol)}
                                                 />
                                             </label>
                                             <label className="field">
@@ -3524,7 +3545,7 @@ export default function App() {
                                                     placeholder="Stop loss"
                                                     type="number"
                                                     min="0"
-                                                    step="0.00001"
+                                                    step={getPriceStep(riskCalcSymbol)}
                                                 />
                                             </label>
                                             {isRiskCalcXau && (
