@@ -1,132 +1,180 @@
 # Trading Journal
 
-A full-stack trading journal web app for logging trades, reviewing performance, and improving consistency.
+A full-stack trading journal for logging trades, reviewing performance, and keeping screenshots and risk notes in one place.
+
+## Demo / Screenshots
+
+- /docs/screenshots/dashboard.png
+- /docs/screenshots/trade-details.png
+- /docs/screenshots/risk-calculator.png
 
 ## Features
 
-- Secure JWT auth with email/password login and registration
-- Google sign-in implemented on backend + UI (requires Google Cloud setup to function end-to-end)
-- Trade CRUD with per-user data scoping
-- Automatic trade metrics: SL/TP pips and RR ratio
-- Filters (symbol, direction, session, created/closed date ranges)
-- Pagination and sorting by newest trades
-- CSV export
-- Session labeling (Asian/London/New York + overlaps) and trade duration display
-- Manual refresh and loading indicators
+- Email/password registration and JWT-based login
+- Optional Google sign-in (requires Google client IDs)
+- Trade CRUD with per-user scoping
+- Close trades with exit price/time and close reason (TP/SL/BreakEven/Manual)
+- Auto metrics for SL/TP pips and RR based on Entry, SL, and TP
+- Post-trade review notes (followed plan, mistakes, improvements, confidence)
+- Screenshot attachments per trade (Preparation, Entry, Exit) with timeframe tags
+- Filters by symbol, direction, status, session, created date, and closed date
+- Summary bar (total R, win rate, avg R, avg confidence, counts)
+- CSV export of the current table
+- Position size / risk calculator (units, lots, 2R and 3R targets)
+- Session labeling and trade duration
 
 ## Tech Stack
 
-Backend:
-- Java + Spring Boot
+Frontend
+- React 19 + Vite
+- @react-oauth/google
+
+Backend
+- Java 17 + Spring Boot 4
 - Spring Security (JWT)
-- Maven
+- Spring Data JPA + Flyway
+- jjwt for token signing
 
-Frontend:
-- React (inside `frontend/`)
-- Node.js + npm
+Database
+- PostgreSQL (default profile)
+- H2 file-based database (optional for local dev)
 
-Database:
-- PostgreSQL (current, recommended)
-- H2 file-based database for local/dev fallback
+Auth
+- Email/password + JWT
+- Google OAuth ID token verification
+
+## Getting Started
+
+Prerequisites
+- Java 17+
+- Node.js 18+
+- npm
+- PostgreSQL
+- Git
+
+## Local Setup
+
+### 1) Backend + PostgreSQL
+
+Create a database (example):
+
+```
+createdb trading_journal
+```
+
+Set environment variables (example):
+
+PowerShell
+```
+$env:DB_URL="jdbc:postgresql://localhost:5432/trading_journal"
+$env:DB_USER="postgres"
+$env:DB_PASSWORD="password"
+$env:JWT_SECRET="replace_with_a_long_random_string"
+# Optional
+$env:APP_GOOGLE_CLIENT_ID="your_google_client_id"
+$env:APP_CORS_ALLOWED_ORIGINS="http://localhost:5173"
+$env:FINNHUB_API_KEY="your_finnhub_key"
+$env:APP_UPLOAD_DIR="uploads"
+```
+
+Bash
+```
+export DB_URL="jdbc:postgresql://localhost:5432/trading_journal"
+export DB_USER="postgres"
+export DB_PASSWORD="password"
+export JWT_SECRET="replace_with_a_long_random_string"
+# Optional
+export APP_GOOGLE_CLIENT_ID="your_google_client_id"
+export APP_CORS_ALLOWED_ORIGINS="http://localhost:5173"
+export FINNHUB_API_KEY="your_finnhub_key"
+export APP_UPLOAD_DIR="uploads"
+```
+
+Run the backend from the repo root:
+
+Windows
+```
+mvnw.cmd spring-boot:run
+```
+
+Mac/Linux
+```
+./mvnw spring-boot:run
+```
+
+Backend runs on http://localhost:8080.
+
+Optional H2 (file-based) instead of Postgres:
+- Remove or override `spring.profiles.active=postgres` in `src/main/resources/application.properties`.
+- Restart the app and it will use the H2 file database configured in `application.properties`.
+
+### 2) Frontend
+
+```
+cd frontend/trading-journal-ui
+npm install
+```
+
+Create `frontend/trading-journal-ui/.env.local`:
+
+```
+VITE_API_BASE_URL=http://localhost:8080
+VITE_GOOGLE_CLIENT_ID=your_google_client_id
+```
+
+Run the frontend:
+
+```
+npm run dev
+```
+
+### 3) Run Both
+
+- Terminal 1: backend (`mvnw spring-boot:run`)
+- Terminal 2: frontend (`npm run dev`)
+
+## Environment Variables
+
+Backend (Spring Boot)
+- `JWT_SECRET` (required for JWT signing)
+- `DB_URL` (Postgres JDBC URL)
+- `DB_USER`
+- `DB_PASSWORD`
+- `APP_GOOGLE_CLIENT_ID` (required for Google sign-in)
+- `APP_CORS_ALLOWED_ORIGINS` (comma-separated list, default is `http://localhost:5173`)
+- `APP_UPLOAD_DIR` (upload directory for screenshots, default is `uploads`)
+- `FINNHUB_API_KEY` (only required for `/api/quote/test`)
+
+Frontend (Vite)
+- `VITE_API_BASE_URL` (defaults to `http://localhost:8080`)
+- `VITE_GOOGLE_CLIENT_ID` (required to enable Google sign-in in the UI)
+
+## Usage Notes
+
+- Register or log in in the UI; the JWT is stored in localStorage and sent on API requests.
+- Trades and attachments are scoped per user (JWT subject email).
+- R outcome is calculated only when Entry, Stop Loss, and Exit are present; otherwise it is excluded from summary stats.
+- Close reason is derived from Exit vs SL/TP (with a small tolerance) but can be overridden; Manual reason is required when Manual is selected.
+- CSV export downloads the current filtered table.
+- Screenshot uploads accept PNG/JPG/WEBP up to 10MB and are served from `/uploads/**`.
+- Session labels are calculated using a fixed GMT+1 offset in the UI.
 
 ## Project Structure
 
-- `src/` -- Spring Boot backend source
-- `frontend/` -- React frontend app
-- `pom.xml` -- Maven configuration
-- `mvnw`, `mvnw.cmd` -- Maven wrapper scripts
-- `.mvn/` -- Maven wrapper files
-
-## Prerequisites
-
-- Java 17+ (recommended)
-- Node.js 18+ (recommended)
-- Git
-
-Note: Maven wrapper is included, so you can run the backend without installing Maven globally.
-
-## Configuration / Secrets
-
-Do not commit secrets (JWT keys, passwords, etc.).
-
-Backend env vars:
-- `JWT_SECRET` (required in production)
-- `GOOGLE_CLIENT_ID` (required for Google sign-in)
-- `CORS_ALLOWED_ORIGINS` (comma-separated, e.g. `http://localhost:5173,https://app.example.com`)
-- `PORT` (optional, defaults to `8080`)
-- `SPRING_PROFILES_ACTIVE=postgres` (use PostgreSQL config)
-- `DB_URL` (PostgreSQL JDBC URL)
-- `DB_USER`
-- `DB_PASSWORD`
-
-Frontend env vars (Vite):
-- `VITE_GOOGLE_CLIENT_ID`
-- `VITE_API_BASE_URL` (optional, defaults to `http://localhost:8080`)
-
-## Getting Started (Local Development)
-
-1) Clone the repository
-
-    git clone git@github.com:trichko123/Trading-Journal.git  
-    cd Trading-Journal
-
-2) Run the backend (Spring Boot) from the repo root
-
-    H2 (default, local/dev):
-    Windows:
-    mvnw.cmd spring-boot:run
-
-    Mac/Linux:
-    ./mvnw spring-boot:run
-
-    PostgreSQL (current usage):
-    Windows (PowerShell):
-    $env:SPRING_PROFILES_ACTIVE="postgres"
-    $env:DB_URL="jdbc:postgresql://localhost:5432/trading_journal"
-    $env:DB_USER="postgres"
-    $env:DB_PASSWORD="postgres"
-    mvnw.cmd spring-boot:run
-
-    Mac/Linux:
-    SPRING_PROFILES_ACTIVE=postgres \
-    DB_URL=jdbc:postgresql://localhost:5432/trading_journal \
-    DB_USER=postgres \
-    DB_PASSWORD=postgres \
-    ./mvnw spring-boot:run
-
-    Backend runs on: http://localhost:8080
-
-    H2 console (dev only): http://localhost:8080/h2-console
-
-3) Run the frontend (React) in a separate terminal
-
-    cd frontend  
-    npm install  
-    npm run dev
-
-    The dev server URL will be shown in the terminal (often http://localhost:5173).
-
-## Authentication (JWT)
-
-The backend uses JWT authentication. Send the token on requests with the header:
-
-    Authorization: Bearer <YOUR_JWT_TOKEN>
-
-## Google OAuth Notes
-
-- Backend and UI support Google sign-in, but you must configure Google Cloud for it to work end-to-end.
-- Set `GOOGLE_CLIENT_ID` on the backend and `VITE_GOOGLE_CLIENT_ID` on the frontend.
-- In Google Cloud Console, add an Authorized JavaScript origin for your frontend
-  (e.g. `http://localhost:5173` for dev and your real domain for production).
-- Ensure `CORS_ALLOWED_ORIGINS` includes the frontend origin(s).
+- `src/main/java` - Spring Boot backend
+- `src/main/resources` - application config and Flyway migrations
+- `frontend/trading-journal-ui` - React frontend (Vite)
+- `uploads` - stored screenshots
+- `data` - local H2 database files (if H2 profile is used)
 
 ## Roadmap
 
-- Advanced analytics (win rate, expectancy, drawdown)
-- Trade screenshots & notes
-- Strategy tags/labels
-- Performance dashboards
+No roadmap items are tracked in the repo yet.
+
+## Contributing
+
+PRs and issues are welcome. Please include clear reproduction steps for bugs and screenshots for UI changes.
 
 ## License
 
-No license specified yet.
+TBD
