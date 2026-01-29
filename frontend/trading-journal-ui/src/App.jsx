@@ -2542,19 +2542,39 @@ export default function App() {
     const summaryStats = useMemo(() => {
         const outcomes = [];
         let excluded = 0;
+        const confidences = [];
+        let winCount = 0;
+        let lossCount = 0;
+        let breakevenCount = 0;
+        const epsilon = 1e-9;
         filteredTrades.forEach((trade) => {
             const rValue = computeOutcomeR(trade);
             if (Number.isFinite(rValue)) {
                 outcomes.push(rValue);
+                if (trade?.closedAt) {
+                    if (Math.abs(rValue) < epsilon) {
+                        breakevenCount += 1;
+                    } else if (rValue > 0) {
+                        winCount += 1;
+                    } else {
+                        lossCount += 1;
+                    }
+                }
             } else {
                 excluded += 1;
+            }
+            if (trade?.closedAt && Number.isFinite(trade.confidence)) {
+                confidences.push(trade.confidence);
             }
         });
         const numericCount = outcomes.length;
         const sum = outcomes.reduce((acc, value) => acc + value, 0);
-        const winCount = outcomes.filter((value) => value > 0).length;
         const average = numericCount ? sum / numericCount : null;
         const winPct = numericCount ? (winCount / numericCount) * 100 : null;
+        const confCount = confidences.length;
+        const confAverage = confCount
+            ? confidences.reduce((acc, value) => acc + value, 0) / confCount
+            : null;
         return {
             tradeCount: filteredTrades.length,
             excluded,
@@ -2562,6 +2582,11 @@ export default function App() {
             sum,
             average,
             winPct,
+            confCount,
+            confAverage,
+            winCount,
+            lossCount,
+            breakevenCount,
         };
     }, [filteredTrades]);
 
@@ -2922,7 +2947,7 @@ export default function App() {
                             <form onSubmit={createTrade} className="trade-form">
                                 <label className="field">
                                     <span>Symbol</span>
-                                    <select className="input" value={symbol} onChange={(e) => setSymbol(e.target.value)}>
+                                    <select className="input select-scroll" value={symbol} onChange={(e) => setSymbol(e.target.value)}>
                                         {INSTRUMENTS.map((pair) => (
                                             <option key={pair.value} value={pair.value}>
                                                 {pair.label}
@@ -3120,6 +3145,42 @@ export default function App() {
                                             }`}
                                         >
                                             {summaryStats.numericCount ? formatRValue(summaryStats.average) : emDash}
+                                        </span>
+                                    </div>
+                                    <div className="summary-stat">
+                                        <span className="summary-label">Avg Conf</span>
+                                        <span className={`summary-value${summaryStats.confCount ? "" : " is-muted"}`}>
+                                            {summaryStats.confCount
+                                                ? `${summaryStats.confAverage.toFixed(1)}/10`
+                                                : emDash}
+                                        </span>
+                                    </div>
+                                    <div className="summary-stat">
+                                        <span className={`summary-value${summaryStats.winCount + summaryStats.lossCount + summaryStats.breakevenCount ? "" : " is-muted"}`}>
+                                            {summaryStats.winCount + summaryStats.lossCount + summaryStats.breakevenCount ? (
+                                                <>
+                                                    <span className="summary-label">Wins</span>{" "}
+                                                    <span className="summary-value is-positive">{summaryStats.winCount}</span>
+                                                </>
+                                            ) : (
+                                                emDash
+                                            )}
+                                        </span>
+                                    </div>
+                                    <div className="summary-stat">
+                                        <span className="summary-label">Losses</span>
+                                        <span className={`summary-value${summaryStats.lossCount ? " is-negative" : " is-muted"}`}>
+                                            {summaryStats.winCount + summaryStats.lossCount + summaryStats.breakevenCount
+                                                ? summaryStats.lossCount
+                                                : emDash}
+                                        </span>
+                                    </div>
+                                    <div className="summary-stat">
+                                        <span className="summary-label">BreakEvens</span>
+                                        <span className={`summary-value${summaryStats.breakevenCount ? "" : " is-muted"}`}>
+                                            {summaryStats.winCount + summaryStats.lossCount + summaryStats.breakevenCount
+                                                ? summaryStats.breakevenCount
+                                                : emDash}
                                         </span>
                                     </div>
                                     {summaryStats.excluded > 0 && (
@@ -3429,7 +3490,7 @@ export default function App() {
                                             <label className="field">
                                                 <span>Symbol</span>
                                                 <select
-                                                    className="input"
+                                                    className="input select-scroll"
                                                     value={riskCalcSymbol}
                                                     onChange={(e) => setRiskCalcSymbol(e.target.value)}
                                                 >
