@@ -1455,11 +1455,13 @@ export default function App() {
     function computeOutcomeR(trade) {
         if (!trade?.closedAt) return null;
         if (trade.exitPrice == null) return null;
-        if (trade.stopLossPrice == null) return null;
         const entry = Number(trade.entryPrice);
         const exit = Number(trade.exitPrice);
+        if (!Number.isFinite(entry) || !Number.isFinite(exit)) return null;
+        if (Math.abs(entry - exit) < 1e-9) return 0;
+        if (trade.stopLossPrice == null) return null;
         const stopLoss = Number(trade.stopLossPrice);
-        if (!Number.isFinite(entry) || !Number.isFinite(exit) || !Number.isFinite(stopLoss)) return null;
+        if (!Number.isFinite(stopLoss)) return null;
 
         const direction = trade.direction?.toUpperCase();
         const risk = direction === "SHORT" ? (stopLoss - entry) : (entry - stopLoss);
