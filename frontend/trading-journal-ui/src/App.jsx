@@ -2901,7 +2901,7 @@ export default function App() {
                                         type="button"
                                         onClick={openRiskCalc}
                                     >
-                                        Risk Calculator
+                                        Risk Calc
                                     </button>
                                 </div>
                             </div>
@@ -3476,7 +3476,7 @@ export default function App() {
                                         <div className="risk-calc-outputs">
                                             <div className="risk-calc-output-row">
                                                 <span>Amount at risk</span>
-                                                <span className={`risk-calc-output-value${riskCalcResult.isValid ? "" : " is-muted"}`}>
+                                                <span className={`risk-calc-output-value${riskCalcResult.baseValid ? "" : " is-muted"}`}>
                                                     {riskCalcResult.baseValid
                                                         ? `${riskCalcAccountCurrency} ${formatCalcNumber(riskCalcResult.riskAmount, 2)}`
                                                         : emDash}
