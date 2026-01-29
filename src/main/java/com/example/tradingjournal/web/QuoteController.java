@@ -16,10 +16,28 @@ public class QuoteController {
 
     private static final String API_KEY_ENV = "FINNHUB_API_KEY";
     private static final Set<String> SUPPORTED_PAIRS = Set.of(
-            "EURUSD",
             "GBPJPY",
+            "EURAUD",
+            "AUDCAD",
+            "EURUSD",
+            "GBPCAD",
             "USDJPY",
-            "USDCHF"
+            "NZDCAD",
+            "NZDJPY",
+            "EURJPY",
+            "EURGBP",
+            "USDCHF",
+            "CADJPY",
+            "AUDUSD",
+            "GBPUSD",
+            "EURCHF",
+            "EURCAD",
+            "NZDUSD",
+            "AUDCHF",
+            "GBPNZD",
+            "AUDJPY",
+            "EURNZD",
+            "XAUUSD"
     );
 
     private final FinnhubQuoteService finnhubQuoteService;

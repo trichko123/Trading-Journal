@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { GoogleLogin } from "@react-oauth/google";
 import { exportToCsv } from "./utils/exportCsv";
+import { INSTRUMENTS, getDisplayUnit, getInstrument, getTickSize } from "./constants/instruments";
 import { calculateRiskPosition } from "./utils/riskCalculator";
 import "./App.css";
 
@@ -27,15 +28,6 @@ const TIMEFRAME_OPTIONS = [
     { value: "1M", label: "1M" },
 ];
 const ACCOUNT_CURRENCIES = ["USD", "EUR", "GBP", "CHF", "JPY"];
-
-// Available currency pairs
-const CURRENCY_PAIRS = [
-    { value: "EURUSD", label: "EUR/USD" },
-    { value: "GBPJPY", label: "GBP/JPY" },
-    { value: "USDJPY", label: "USD/JPY" },
-    { value: "USDCHF", label: "USD/CHF" },
-    // ... add the rest of the pairs SLEDNO
-];
 
 const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 
@@ -169,9 +161,7 @@ function TradeDetailsPanelLeft({
     }, [open, onClose]);
 
     const emDash = "\u2014";
-    const getPipSizeForSymbol = (symbol) => (
-        symbol?.toUpperCase().includes("JPY") ? 0.01 : 0.0001
-    );
+    const getPipSizeForSymbol = (symbol) => getTickSize(symbol);
     const deriveCloseReasonForPrices = ({ symbol, exitPrice, takeProfitPrice, stopLossPrice, entryPrice }) => {
         const exit = Number(exitPrice);
         if (!Number.isFinite(exit)) return "";
@@ -410,7 +400,7 @@ function TradeDetailsPanelLeft({
                                                         }
                                                     }}
                                                 >
-                                                    {CURRENCY_PAIRS.map((pair) => (
+                                                    {INSTRUMENTS.map((pair) => (
                                                         <option key={pair.value} value={pair.value}>
                                                             {pair.label}
                                                         </option>
@@ -628,10 +618,11 @@ function TradeDetailsPanelLeft({
                                     const slPipsRow = formatRowValue(activeTrade.slPips);
                                     const tpPipsRow = formatRowValue(activeTrade.tpPips);
                                     const rrRow = formatRowValue(activeTrade.rrRatio);
+                                    const unitLabel = getDisplayUnit(activeTrade.symbol);
                                     return (
                                         <>
-                                            <DetailRow label="SL pips" value={slPipsRow.displayValue} isMuted={slPipsRow.isMuted} />
-                                            <DetailRow label="TP pips" value={tpPipsRow.displayValue} isMuted={tpPipsRow.isMuted} />
+                                            <DetailRow label={`SL ${unitLabel}`} value={slPipsRow.displayValue} isMuted={slPipsRow.isMuted} />
+                                            <DetailRow label={`TP ${unitLabel}`} value={tpPipsRow.displayValue} isMuted={tpPipsRow.isMuted} />
                                             <DetailRow label="R/R" value={rrRow.displayValue} isMuted={rrRow.isMuted} />
                                         </>
                                     );
@@ -1427,6 +1418,7 @@ export default function App() {
     const [riskCalcEntryPrice, setRiskCalcEntryPrice] = useState("");
     const [riskCalcStopLossPrice, setRiskCalcStopLossPrice] = useState("");
     const [riskCalcConversionRate, setRiskCalcConversionRate] = useState("");
+    const [riskCalcContractSize, setRiskCalcContractSize] = useState("100");
 
     const [error, setError] = useState("");
     const [isLoading, setIsLoading] = useState(false);
@@ -1654,8 +1646,8 @@ export default function App() {
     function formatSymbol(symbol) {
         // Convert "EURUSD" to "EUR/USD" for display
         if (!symbol) return "-";
-        const pair = CURRENCY_PAIRS.find(p => p.value === symbol);
-        return pair ? pair.label : symbol; // Return formatted label if found, otherwise return as-is
+        const instrument = getInstrument(symbol);
+        return instrument?.label || symbol;
     }
 
     function computeDerived(symbol, direction, entry, stopLoss, takeProfit) {
@@ -1666,7 +1658,7 @@ export default function App() {
         if (entryNum <= 0 || slNum <= 0 || tpNum <= 0) return null;
 
         const isLong = direction?.toUpperCase() === "LONG";
-        const pipSize = symbol?.toUpperCase()?.endsWith("JPY") ? 0.01 : 0.0001;
+        const pipSize = getTickSize(symbol);
 
         if (isLong) {
             if (slNum >= entryNum || tpNum <= entryNum) return null;
@@ -2602,8 +2594,8 @@ export default function App() {
         { header: "Entry", accessorKey: "entryPrice" },
         { header: "SL", accessorKey: "stopLossPrice" },
         { header: "TP", accessorKey: "takeProfitPrice" },
-        { header: "SL pips", accessorKey: "slPips" },
-        { header: "TP pips", accessorKey: "tpPips" },
+        { header: "SL dist", accessorKey: "slPips" },
+        { header: "TP dist", accessorKey: "tpPips" },
         { header: "RR", accessorKey: "rrRatio" },
         { header: "Created", accessorFn: (trade) => toIsoString(trade.createdAt) },
         { header: "Closed", accessorFn: (trade) => toIsoString(trade.closedAt) },
@@ -2694,6 +2686,9 @@ export default function App() {
         setLightboxDragStart({ x: 0, y: 0 });
     }, [lightboxUrl]);
 
+    const isRiskCalcXau = riskCalcSymbol === "XAUUSD";
+    const riskCalcContractSizeNum = Number(riskCalcContractSize);
+    const riskCalcContractSizeValid = Number.isFinite(riskCalcContractSizeNum) && riskCalcContractSizeNum > 0;
     const riskCalcResult = useMemo(() => calculateRiskPosition({
         accountBalance: riskCalcBalance,
         riskPercent: riskCalcRiskPercent,
@@ -2702,6 +2697,7 @@ export default function App() {
         stopLossPrice: riskCalcStopLossPrice,
         accountCurrency: riskCalcAccountCurrency,
         conversionRate: riskCalcConversionRate,
+        contractSizeOverride: isRiskCalcXau && riskCalcContractSizeValid ? riskCalcContractSizeNum : null,
     }), [
         riskCalcAccountCurrency,
         riskCalcBalance,
@@ -2710,7 +2706,24 @@ export default function App() {
         riskCalcRiskPercent,
         riskCalcStopLossPrice,
         riskCalcSymbol,
+        riskCalcContractSize,
+        isRiskCalcXau,
+        riskCalcContractSizeValid,
+        riskCalcContractSizeNum,
     ]);
+
+    useEffect(() => {
+        const stored = localStorage.getItem("xau_contract_size");
+        if (stored) {
+            setRiskCalcContractSize(stored);
+        }
+    }, []);
+
+    useEffect(() => {
+        if (isRiskCalcXau) {
+            localStorage.setItem("xau_contract_size", riskCalcContractSize);
+        }
+    }, [isRiskCalcXau, riskCalcContractSize]);
 
     const emDash = "\u2014";
     const formatRValue = (value) => {
@@ -2734,9 +2747,10 @@ export default function App() {
         if (!Number.isFinite(value)) return emDash;
         return Math.round(value).toLocaleString();
     };
-    const formatCalcPrice = (value, pipSize) => {
+    const formatCalcPrice = (value, symbolValue) => {
         if (!Number.isFinite(value)) return emDash;
-        const decimals = pipSize === 0.01 ? 3 : 5;
+        const instrument = getInstrument(symbolValue);
+        const decimals = instrument?.value === "XAUUSD" ? 2 : (getTickSize(symbolValue) === 0.01 ? 3 : 5);
         return Number(value).toFixed(decimals);
     };
     const [copiedKey, setCopiedKey] = useState("");
@@ -2901,7 +2915,7 @@ export default function App() {
                                         type="button"
                                         onClick={openRiskCalc}
                                     >
-                                        Risk Calc
+                                        Risk Calculator
                                     </button>
                                 </div>
                             </div>
@@ -2909,7 +2923,7 @@ export default function App() {
                                 <label className="field">
                                     <span>Symbol</span>
                                     <select className="input" value={symbol} onChange={(e) => setSymbol(e.target.value)}>
-                                        {CURRENCY_PAIRS.map((pair) => (
+                                        {INSTRUMENTS.map((pair) => (
                                             <option key={pair.value} value={pair.value}>
                                                 {pair.label}
                                             </option>
@@ -2969,7 +2983,7 @@ export default function App() {
                                     if (stopLossPrice === "" || takeProfitPrice === "") {
                                         return (
                                             <div className="helper-text">
-                                                SL/TP optional. Enter both to see pips and RR.
+                                                SL/TP optional. Enter both to see distances and RR.
                                             </div>
                                         );
                                     }
@@ -2977,7 +2991,7 @@ export default function App() {
                                     return (
                                         <div className="helper-text">
                                             {derived
-                                                ? `SL pips: ${derived.slPips} | TP pips: ${derived.tpPips} | RR: ${derived.rrRatio}`
+                                                ? `SL ${getDisplayUnit(symbol)}: ${derived.slPips} | TP ${getDisplayUnit(symbol)}: ${derived.tpPips} | RR: ${derived.rrRatio}`
                                                 : "Entry, Stop Loss, and Take Profit must be valid and ordered correctly."}
                                         </div>
                                     );
@@ -3419,7 +3433,7 @@ export default function App() {
                                                     value={riskCalcSymbol}
                                                     onChange={(e) => setRiskCalcSymbol(e.target.value)}
                                                 >
-                                                    {CURRENCY_PAIRS.map((pair) => (
+                                                    {INSTRUMENTS.map((pair) => (
                                                         <option key={pair.value} value={pair.value}>
                                                             {pair.label}
                                                         </option>
@@ -3450,6 +3464,24 @@ export default function App() {
                                                     step="0.00001"
                                                 />
                                             </label>
+                                            {isRiskCalcXau && (
+                                                <label className="field risk-calc-full">
+                                                    <span>Contract size (Units per lot)</span>
+                                                    <input
+                                                        className="input"
+                                                        value={riskCalcContractSize}
+                                                        onChange={(e) => setRiskCalcContractSize(e.target.value)}
+                                                        placeholder="100"
+                                                        type="number"
+                                                        min="0"
+                                                        step="0.01"
+                                                    />
+                                                    <span className="risk-calc-helper">Usually 100 - check with your broker</span>
+                                                    {!riskCalcContractSizeValid && (
+                                                        <span className="risk-calc-error">Enter a valid contract size.</span>
+                                                    )}
+                                                </label>
+                                            )}
                                             {riskCalcResult.needsConversion && (
                                                 <label className="field risk-calc-full">
                                                     <span>Conversion rate</span>
@@ -3486,7 +3518,7 @@ export default function App() {
                                                 <span>Stop loss distance</span>
                                                 <span className={`risk-calc-output-value${riskCalcResult.baseValid ? "" : " is-muted"}`}>
                                                     {riskCalcResult.baseValid
-                                                        ? `${formatCalcNumber(riskCalcResult.slPips, 1)} pips`
+                                                        ? `${formatCalcNumber(riskCalcResult.slPips, 1)} ${getDisplayUnit(riskCalcSymbol)}`
                                                         : emDash}
                                                 </span>
                                             </div>
@@ -3540,7 +3572,7 @@ export default function App() {
                                                         type="button"
                                                         className="btn btn-ghost btn-sm copy-btn"
                                                         aria-label="Copy 2R target"
-                                                        onClick={() => handleCopy("target2R", formatCalcPrice(riskCalcResult.target2R, riskCalcResult.pipSize))}
+                                                        onClick={() => handleCopy("target2R", formatCalcPrice(riskCalcResult.target2R, riskCalcSymbol))}
                                                         disabled={!riskCalcResult.baseValid}
                                                     >
                                                         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -3550,7 +3582,7 @@ export default function App() {
                                                     </button>
                                                     <span className={`risk-calc-output-value${riskCalcResult.baseValid ? "" : " is-muted"}`}>
                                                         {riskCalcResult.baseValid
-                                                            ? formatCalcPrice(riskCalcResult.target2R, riskCalcResult.pipSize)
+                                                            ? formatCalcPrice(riskCalcResult.target2R, riskCalcSymbol)
                                                             : emDash}
                                                     </span>
                                                 </span>
@@ -3563,7 +3595,7 @@ export default function App() {
                                                         type="button"
                                                         className="btn btn-ghost btn-sm copy-btn"
                                                         aria-label="Copy 3R target"
-                                                        onClick={() => handleCopy("target3R", formatCalcPrice(riskCalcResult.target3R, riskCalcResult.pipSize))}
+                                                        onClick={() => handleCopy("target3R", formatCalcPrice(riskCalcResult.target3R, riskCalcSymbol))}
                                                         disabled={!riskCalcResult.baseValid}
                                                     >
                                                         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -3573,7 +3605,7 @@ export default function App() {
                                                     </button>
                                                     <span className={`risk-calc-output-value${riskCalcResult.baseValid ? "" : " is-muted"}`}>
                                                         {riskCalcResult.baseValid
-                                                            ? formatCalcPrice(riskCalcResult.target3R, riskCalcResult.pipSize)
+                                                            ? formatCalcPrice(riskCalcResult.target3R, riskCalcSymbol)
                                                             : emDash}
                                                     </span>
                                                 </span>
