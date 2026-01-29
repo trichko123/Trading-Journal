@@ -17,8 +17,9 @@ public class Trade {
     private String symbol;
     @Column(nullable = false, length = 20)
     private String direction;
+    @Column(name = "entry_price", precision = 18, scale = 8)
     private BigDecimal entryPrice;
-    @Column(name = "exit_price")
+    @Column(name = "exit_price", precision = 18, scale = 8)
     private BigDecimal exitPrice;
     @Column(name = "close_reason_override", length = 20)
     private String closeReasonOverride;
@@ -36,7 +37,9 @@ public class Trade {
     private Integer confidence;
     @Column(name = "review_updated_at")
     private Instant reviewUpdatedAt;
+    @Column(name = "stop_loss_price", precision = 18, scale = 8)
     private BigDecimal stopLossPrice;
+    @Column(name = "take_profit_price", precision = 18, scale = 8)
     private BigDecimal takeProfitPrice;
     private BigDecimal slPips;
     private BigDecimal tpPips;

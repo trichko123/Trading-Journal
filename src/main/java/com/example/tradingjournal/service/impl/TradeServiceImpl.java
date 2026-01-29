@@ -33,6 +33,9 @@ public class TradeServiceImpl implements TradeService {
 
     @Override
     public Trade create(String symbol, String direction, BigDecimal entryPrice, BigDecimal exitPrice, String closeReasonOverride, String manualReason, String manualDescription, BigDecimal stopLossPrice, BigDecimal takeProfitPrice, Instant closedAt) {
+        if (closedAt == null) {
+            exitPrice = null;
+        }
         validateTradeInput(symbol, direction, entryPrice, exitPrice, stopLossPrice, takeProfitPrice);
         validateClosedTrade(exitPrice, closedAt);
         Metrics metrics = computeMetrics(symbol, direction, entryPrice, stopLossPrice, takeProfitPrice);
@@ -79,6 +82,9 @@ public class TradeServiceImpl implements TradeService {
 
     @Override
     public Trade update(Long id, String symbol, String direction, BigDecimal entryPrice, BigDecimal exitPrice, String closeReasonOverride, String manualReason, String manualDescription, BigDecimal stopLossPrice, BigDecimal takeProfitPrice, Instant closedAt, Instant createdAt) {
+        if (closedAt == null) {
+            exitPrice = null;
+        }
         validateTradeInput(symbol, direction, entryPrice, exitPrice, stopLossPrice, takeProfitPrice);
         validateClosedTrade(exitPrice, closedAt);
         Metrics metrics = computeMetrics(symbol, direction, entryPrice, stopLossPrice, takeProfitPrice);
