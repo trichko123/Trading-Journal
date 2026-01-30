@@ -82,6 +82,14 @@ function formatMoneyValue(value, currencyCode, fallbackSymbol = "$") {
     return `${sign}${fallbackSymbol}${absValue.toFixed(2)}`;
 }
 
+function formatMoneyNullable(value, currencyCode, { forceNegative = false } = {}) {
+    if (value === null || value === undefined) return "\u2014";
+    const num = Number(value);
+    if (!Number.isFinite(num)) return "\u2014";
+    const adjusted = forceNegative ? -Math.abs(num) : num;
+    return formatMoneyValue(adjusted, currencyCode);
+}
+
 function formatPercentValue(value, decimals = 2) {
     if (!Number.isFinite(value)) return "\u2014";
     const sign = value > 0 ? "+" : value < 0 ? "-" : "";
@@ -97,6 +105,7 @@ function TradeDetailsPanelLeft({
     formatSymbol,
     getSessionLabel,
     formatOutcome,
+    formatRValue,
     onCloseTrade,
     onOpenReview,
     toDateTimeLocalValue,
@@ -127,8 +136,17 @@ function TradeDetailsPanelLeft({
     setEditManualReason,
     editManualDescription,
     setEditManualDescription,
+    editNetPnlMoney,
+    setEditNetPnlMoney,
+    editCommissionMoney,
+    setEditCommissionMoney,
+    editSwapMoney,
+    setEditSwapMoney,
     errorMessage,
     moneySummary,
+    strategyMoney,
+    realizedMoney,
+    statsMode,
     moneyCurrency,
     panelRef: externalPanelRef,
     otherPanelRef,
@@ -146,6 +164,10 @@ function TradeDetailsPanelLeft({
     const [closeReasonOverride, setCloseReasonOverride] = useState("");
     const [closeManualReason, setCloseManualReason] = useState("");
     const [closeManualDescription, setCloseManualDescription] = useState("");
+    const [closeNetPnl, setCloseNetPnl] = useState("");
+    const [closeCommission, setCloseCommission] = useState("");
+    const [closeSwap, setCloseSwap] = useState("");
+    const [closeNetPnlMode, setCloseNetPnlMode] = useState("net");
     const [closeError, setCloseError] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
     const internalPanelRef = useRef(null);
@@ -266,6 +288,10 @@ function TradeDetailsPanelLeft({
         setCloseReasonOverride(trade.closeReasonOverride ?? "");
         setCloseManualReason(trade.manualReason ?? "");
         setCloseManualDescription(trade.manualDescription ?? "");
+        setCloseNetPnl(trade.netPnlMoney != null ? String(trade.netPnlMoney) : "");
+        setCloseCommission(trade.commissionMoney != null ? String(trade.commissionMoney) : "");
+        setCloseSwap(trade.swapMoney != null ? String(trade.swapMoney) : "");
+        setCloseNetPnlMode("net");
         setCloseClosedAt(safeToDateTimeLocalValue(new Date()));
     }, [open, trade?.id, safeToDateTimeLocalValue]);
     useEffect(() => {
@@ -362,6 +388,14 @@ function TradeDetailsPanelLeft({
         const displayValue = isEmpty ? emDash : value;
         return { displayValue, isMuted: displayValue === emDash };
     };
+    const formatMoneyRow = (value) => {
+        const displayValue = formatMoneyNullable(value, moneyCurrency);
+        return { displayValue, isMuted: displayValue === emDash };
+    };
+    const formatCommissionRow = (value) => {
+        const displayValue = formatMoneyNullable(value, moneyCurrency, { forceNegative: true });
+        return { displayValue, isMuted: displayValue === emDash };
+    };
     const formatFollowedPlan = (value) => {
         if (!value) return emDash;
         const upper = String(value).toUpperCase();
@@ -375,6 +409,37 @@ function TradeDetailsPanelLeft({
     const hasMoneyValues = Number.isFinite(pnlValue) && Number.isFinite(balanceAfterValue);
     const pnlDisplay = hasMoneyValues ? formatMoneyValue(pnlValue, moneyCurrency) : emDash;
     const balanceDisplay = hasMoneyValues ? formatMoneyValue(balanceAfterValue, moneyCurrency) : emDash;
+    const isBrokerMode = statsMode === "realized";
+    const isEstimated = isBrokerMode && realizedMoney && realizedMoney.isRealizedCovered === false;
+    const strategyPnl = strategyMoney?.pnlMoney;
+    const brokerPnl = realizedMoney?.pnlMoney;
+    const hasStrategyPnl = Number.isFinite(strategyPnl);
+    const hasBrokerPnl = Number.isFinite(brokerPnl);
+    const deltaPnl = hasBrokerPnl && hasStrategyPnl ? brokerPnl - strategyPnl : null;
+    const deltaToneClass = Number.isFinite(deltaPnl)
+        ? deltaPnl > 0
+            ? " is-positive"
+            : deltaPnl < 0
+                ? " is-negative"
+                : ""
+        : " is-muted";
+    const planRiskAmount = strategyMoney?.riskAmount;
+    const brokerRiskAmount = realizedMoney?.riskAmount;
+    const planR = hasStrategyPnl && Number.isFinite(planRiskAmount) && planRiskAmount !== 0
+        ? strategyPnl / planRiskAmount
+        : null;
+    const brokerR = hasBrokerPnl && Number.isFinite(brokerRiskAmount) && brokerRiskAmount !== 0
+        ? brokerPnl / brokerRiskAmount
+        : null;
+    const deltaR = Number.isFinite(planR) && Number.isFinite(brokerR) ? brokerR - planR : null;
+    const deltaRToneClass = Number.isFinite(deltaR)
+        ? deltaR > 0
+            ? " is-positive"
+            : deltaR < 0
+                ? " is-negative"
+                : ""
+        : " is-muted";
+    const hasBrokerNet = activeTrade?.netPnlMoney !== null && activeTrade?.netPnlMoney !== undefined;
 
     return (
         <>
@@ -420,12 +485,166 @@ function TradeDetailsPanelLeft({
 
                     <div className="drawer-sections">
                         <div className="drawer-section">
-                            <h4 className="drawer-section-title">Performance</h4>
+                            <h4 className="drawer-section-title">
+                                {isBrokerMode ? (
+                                    <span className="inline-tag-wrap">
+                                        <span>Performance (Broker)</span>
+                                        {isEstimated && <span className="inline-tag">Estimated</span>}
+                                    </span>
+                                ) : "Performance"}
+                            </h4>
                             <div className="drawer-section-body">
-                                <DetailRow label="P/L" value={pnlDisplay} isMuted={!hasMoneyValues} />
-                                <DetailRow label="Balance after" value={balanceDisplay} isMuted={!hasMoneyValues} />
+                                <DetailRow
+                                    label={isBrokerMode ? "P/L (Broker)" : "P/L (Plan)"}
+                                    value={pnlDisplay}
+                                    isMuted={!hasMoneyValues}
+                                />
+                                <DetailRow
+                                    label={isBrokerMode ? "Balance after (Broker)" : "Balance after (Plan)"}
+                                    value={balanceDisplay}
+                                    isMuted={!hasMoneyValues}
+                                />
                             </div>
                         </div>
+                        {isBrokerMode && (
+                            <div className="drawer-section">
+                                <h4 className="drawer-section-title">Broker</h4>
+                                <div className="drawer-section-body">
+                                    {isEditing ? (
+                                        isClosed ? (
+                                            <>
+                                                <DetailRow
+                                                    label="Net P/L (after commission & swap)"
+                                                    isEditing
+                                                    value={
+                                                        <div className="input-stack">
+                                                            <input
+                                                                className="input"
+                                                                type="number"
+                                                                step="0.01"
+                                                                value={editNetPnlMoney}
+                                                                onChange={(e) => setEditNetPnlMoney(e.target.value)}
+                                                                placeholder="Optional"
+                                                            />
+                                                            <span className="input-helper">
+                                                                Used in Broker mode. Leave blank to keep using the Plan estimate.
+                                                            </span>
+                                                        </div>
+                                                    }
+                                                />
+                                                <DetailRow
+                                                    label="Commission (cost)"
+                                                    isEditing
+                                                    value={
+                                                        <input
+                                                            className="input"
+                                                            type="number"
+                                                            step="0.01"
+                                                            min="0"
+                                                            value={editCommissionMoney}
+                                                            onChange={(e) => setEditCommissionMoney(e.target.value)}
+                                                            placeholder="Optional"
+                                                        />
+                                                    }
+                                                />
+                                                <DetailRow
+                                                    label="Swap"
+                                                    isEditing
+                                                    value={
+                                                        <input
+                                                            className="input"
+                                                            type="number"
+                                                            step="0.01"
+                                                            value={editSwapMoney}
+                                                            onChange={(e) => setEditSwapMoney(e.target.value)}
+                                                            placeholder="Optional"
+                                                        />
+                                                    }
+                                                />
+                                            </>
+                                        ) : (
+                                            <div className="drawer-note">
+                                                Broker P/L can be added after the trade is closed.
+                                            </div>
+                                        )
+                                    ) : (
+                                        (() => {
+                                            const netRow = formatMoneyRow(activeTrade.netPnlMoney);
+                                            const commissionRow = formatCommissionRow(activeTrade.commissionMoney);
+                                            const swapRow = formatMoneyRow(activeTrade.swapMoney);
+                                            return (
+                                                <>
+                                                    <DetailRow label="Net P/L (Broker)" value={netRow.displayValue} isMuted={netRow.isMuted} />
+                                                    <DetailRow label="Commission (cost)" value={commissionRow.displayValue} isMuted={commissionRow.isMuted} />
+                                                    <DetailRow label="Swap" value={swapRow.displayValue} isMuted={swapRow.isMuted} />
+                                                </>
+                                            );
+                                        })()
+                                    )}
+                                </div>
+                            </div>
+                        )}
+                        {!isBrokerMode && hasBrokerNet && (
+                            <div className="drawer-section">
+                                <h4 className="drawer-section-title">Broker vs Plan (comparison)</h4>
+                                <div className="drawer-section-body">
+                                    <DetailRow
+                                        label="Broker P/L (Net)"
+                                        value={formatMoneyNullable(brokerPnl, moneyCurrency)}
+                                        isMuted={!hasBrokerPnl}
+                                    />
+                                    <DetailRow
+                                        label="Δ $ (Broker − Plan)"
+                                        value={
+                                            <span className={`summary-value${deltaToneClass}`}>
+                                                {formatMoneyNullable(deltaPnl, moneyCurrency)}
+                                            </span>
+                                        }
+                                        isMuted={!Number.isFinite(deltaPnl)}
+                                    />
+                                    <DetailRow
+                                        label="Δ R (Broker − Plan)"
+                                        value={
+                                            <span className={`summary-value${deltaRToneClass}`}>
+                                                {Number.isFinite(deltaR) ? formatRValue(deltaR) : emDash}
+                                            </span>
+                                        }
+                                        isMuted={!Number.isFinite(deltaR)}
+                                    />
+                                    <div className="drawer-note">Broker data entered.</div>
+                                </div>
+                            </div>
+                        )}
+                        {isBrokerMode && (
+                            <div className="drawer-section">
+                                <h4 className="drawer-section-title">Plan (comparison)</h4>
+                                <div className="drawer-section-body">
+                                    <DetailRow
+                                        label="Plan P/L"
+                                        value={formatMoneyNullable(strategyPnl, moneyCurrency)}
+                                        isMuted={!hasStrategyPnl}
+                                    />
+                                    <DetailRow
+                                        label="Δ $ (Broker − Plan)"
+                                        value={
+                                            <span className={`summary-value${deltaToneClass}`}>
+                                                {formatMoneyNullable(deltaPnl, moneyCurrency)}
+                                            </span>
+                                        }
+                                        isMuted={!Number.isFinite(deltaPnl)}
+                                    />
+                                    <DetailRow
+                                        label="Δ R (Broker − Plan)"
+                                        value={
+                                            <span className={`summary-value${deltaRToneClass}`}>
+                                                {Number.isFinite(deltaR) ? formatRValue(deltaR) : emDash}
+                                            </span>
+                                        }
+                                        isMuted={!Number.isFinite(deltaR)}
+                                    />
+                                </div>
+                            </div>
+                        )}
                         <div className="drawer-section">
                             <h4 className="drawer-section-title">Levels</h4>
                             <div className="drawer-section-body">
@@ -854,7 +1073,7 @@ function TradeDetailsPanelLeft({
                                                                     }
                                                                 />
                                                             )}
-                                                            {closeReasonOverride === "Manual" && closeManualReason === "Other" && (
+                                                    {closeReasonOverride === "Manual" && closeManualReason === "Other" && (
                                                                 <DetailRow
                                                                     label="Close Description"
                                                                     isEditing
@@ -869,6 +1088,65 @@ function TradeDetailsPanelLeft({
                                                                     }
                                                                 />
                                                             )}
+                                                            <DetailRow
+                                                                label="Net P/L (after commission & swap)"
+                                                                isEditing
+                                                                value={
+                                                                    <div className="input-stack">
+                                                                        <div className="input-inline">
+                                                                            <input
+                                                                                className="input"
+                                                                                type="number"
+                                                                                step="0.01"
+                                                                                value={closeNetPnl}
+                                                                                onChange={(e) => setCloseNetPnl(e.target.value)}
+                                                                                placeholder="Optional"
+                                                                            />
+                                                                            <select
+                                                                                className="input input-compact input-inline-select"
+                                                                                value={closeNetPnlMode}
+                                                                                onChange={(e) => setCloseNetPnlMode(e.target.value)}
+                                                                                aria-label="Net P/L input meaning"
+                                                                            >
+                                                                                <option value="net">Final Net (recommended)</option>
+                                                                                <option value="gross">Gross Profit (auto-net)</option>
+                                                                            </select>
+                                                                        </div>
+                                                                        <span className="input-helper">
+                                                                            Used in Broker mode. Leave blank to use estimated Plan results.
+                                                                        </span>
+                                                                    </div>
+                                                                }
+                                                            />
+                                                            <DetailRow
+                                                                label="Commission (cost)"
+                                                                isEditing
+                                                                value={
+                                                                    <input
+                                                                        className="input"
+                                                                        type="number"
+                                                                        step="0.01"
+                                                                        min="0"
+                                                                        value={closeCommission}
+                                                                        onChange={(e) => setCloseCommission(e.target.value)}
+                                                                        placeholder="Optional"
+                                                                    />
+                                                                }
+                                                            />
+                                                            <DetailRow
+                                                                label="Swap"
+                                                                isEditing
+                                                                value={
+                                                                    <input
+                                                                        className="input"
+                                                                        type="number"
+                                                                        step="0.01"
+                                                                        value={closeSwap}
+                                                                        onChange={(e) => setCloseSwap(e.target.value)}
+                                                                        placeholder="Optional"
+                                                                    />
+                                                                }
+                                                            />
                                                         </>
                                                     ) : (
                                                         <>
@@ -1033,6 +1311,10 @@ function TradeDetailsPanelLeft({
                                     setCloseReasonOverride(activeTrade.closeReasonOverride ?? "");
                                     setCloseManualReason(activeTrade.manualReason ?? "");
                                     setCloseManualDescription(activeTrade.manualDescription ?? "");
+                                    setCloseNetPnl(activeTrade.netPnlMoney != null ? String(activeTrade.netPnlMoney) : "");
+                                    setCloseCommission(activeTrade.commissionMoney != null ? String(activeTrade.commissionMoney) : "");
+                                    setCloseSwap(activeTrade.swapMoney != null ? String(activeTrade.swapMoney) : "");
+                                    setCloseNetPnlMode("net");
                                     setCloseClosedAt(safeToDateTimeLocalValue(new Date()));
                                 }}
                             >
@@ -1072,6 +1354,27 @@ function TradeDetailsPanelLeft({
                                             return;
                                         }
                                     }
+                                    const netPnlNumber = closeNetPnl === "" ? null : Number(closeNetPnl);
+                                    if (closeNetPnl !== "" && !Number.isFinite(netPnlNumber)) {
+                                        setCloseError("Net P/L must be a valid number.");
+                                        return;
+                                    }
+                                    const commissionNumber = closeCommission === "" ? null : Number(closeCommission);
+                                    if (closeCommission !== "" && (!Number.isFinite(commissionNumber) || commissionNumber < 0)) {
+                                        setCloseError("Commission must be a valid non-negative number.");
+                                        return;
+                                    }
+                                    const swapNumber = closeSwap === "" ? null : Number(closeSwap);
+                                    if (closeSwap !== "" && !Number.isFinite(swapNumber)) {
+                                        setCloseError("Swap must be a valid number.");
+                                        return;
+                                    }
+                                    let effectiveNetPnl = netPnlNumber;
+                                    if (closeNetPnlMode === "gross" && netPnlNumber != null) {
+                                        const commissionValue = commissionNumber ?? 0;
+                                        const swapValue = swapNumber ?? 0;
+                                        effectiveNetPnl = netPnlNumber + swapValue - commissionValue;
+                                    }
                                     setCloseError("");
                                     setIsSubmitting(true);
                                     try {
@@ -1087,6 +1390,9 @@ function TradeDetailsPanelLeft({
                                                 closeReasonOverride === "Manual" && closeManualReason === "Other"
                                                     ? closeManualDescription.trim()
                                                     : null,
+                                            netPnlMoney: effectiveNetPnl,
+                                            commissionMoney: commissionNumber,
+                                            swapMoney: swapNumber,
                                         });
                                         setIsClosing(false);
                                         onClose();
@@ -1135,6 +1441,10 @@ function TradeDetailsPanelLeft({
                                             setCloseReasonOverride("");
                                             setCloseManualReason("");
                                             setCloseManualDescription("");
+                                            setCloseNetPnl("");
+                                            setCloseCommission("");
+                                            setCloseSwap("");
+                                            setCloseNetPnlMode("net");
                                             setCloseError("");
                                             setIsClosing(true);
                                         }}
@@ -1423,6 +1733,7 @@ export default function App() {
     const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
 
     const [trades, setTrades] = useState([]);
+    const [statsMode, setStatsMode] = useState("strategy");
     const [symbol, setSymbol] = useState("GBPJPY");
     const [direction, setDirection] = useState("LONG");
     const [entryPrice, setEntryPrice] = useState("187.25");
@@ -1441,6 +1752,9 @@ export default function App() {
     const [editCloseReasonOverride, setEditCloseReasonOverride] = useState("");
     const [editManualReason, setEditManualReason] = useState("");
     const [editManualDescription, setEditManualDescription] = useState("");
+    const [editNetPnlMoney, setEditNetPnlMoney] = useState("");
+    const [editCommissionMoney, setEditCommissionMoney] = useState("");
+    const [editSwapMoney, setEditSwapMoney] = useState("");
     const [confirmPassword, setConfirmPassword] = useState("");
     const [isDetailsEditing, setIsDetailsEditing] = useState(false);
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -1520,7 +1834,7 @@ export default function App() {
         "New York / Asian",
     ];
 
-    function computeOutcomeR(trade) {
+    function computeStrategyOutcomeR(trade) {
         if (!trade?.closedAt) return null;
         if (trade.exitPrice == null) return null;
         const entry = Number(trade.entryPrice);
@@ -1541,16 +1855,44 @@ export default function App() {
         return rValue;
     }
 
+    const isNetPnlPresent = (trade) => {
+        if (!trade) return false;
+        if (trade.netPnlMoney === null || trade.netPnlMoney === undefined) return false;
+        return Number.isFinite(Number(trade.netPnlMoney));
+    };
+
+    const getRealizedRIfPresent = (trade) => {
+        if (!isNetPnlPresent(trade)) return null;
+        const entry = realizedLedger?.byTrade?.get(trade.id);
+        if (!entry || !Number.isFinite(entry.riskAmount) || entry.riskAmount === 0) return null;
+        return Number(trade.netPnlMoney) / entry.riskAmount;
+    };
+
+    const getOutcomeRForMode = (trade) => {
+        const strategyR = computeStrategyOutcomeR(trade);
+        if (!Number.isFinite(strategyR)) return null;
+        if (statsMode !== "realized") return strategyR;
+        const realizedEntry = realizedLedger?.byTrade?.get(trade.id);
+        if (!realizedEntry || !Number.isFinite(realizedEntry.riskAmount) || realizedEntry.riskAmount === 0) {
+            return strategyR;
+        }
+        if (isNetPnlPresent(trade)) {
+            const netPnl = Number(trade.netPnlMoney);
+            return netPnl / realizedEntry.riskAmount;
+        }
+        return strategyR;
+    };
+
     function formatOutcome(trade) {
         const emDash = "\u2014";
-        const rValue = computeOutcomeR(trade);
+        const rValue = getOutcomeRForMode(trade);
         if (!Number.isFinite(rValue)) return emDash;
         const sign = rValue > 0 ? "+" : "";
         return `${sign}${rValue.toFixed(2)}R`;
     }
 
     function getOutcomeClass(trade) {
-        const rValue = computeOutcomeR(trade);
+        const rValue = getOutcomeRForMode(trade);
         if (!Number.isFinite(rValue)) return "outcome outcome--na";
         if (Math.abs(rValue) < 1e-9) return "outcome outcome--flat";
         return rValue > 0 ? "outcome outcome--win" : "outcome outcome--loss";
@@ -1960,6 +2302,15 @@ export default function App() {
         setEditCloseReasonOverride(trade.closeReasonOverride ?? "");
         setEditManualReason(trade.manualReason ?? "");
         setEditManualDescription(trade.manualDescription ?? "");
+        if (statsMode === "realized") {
+            setEditNetPnlMoney(trade.netPnlMoney != null ? trade.netPnlMoney.toString() : "");
+            setEditCommissionMoney(trade.commissionMoney != null ? trade.commissionMoney.toString() : "");
+            setEditSwapMoney(trade.swapMoney != null ? trade.swapMoney.toString() : "");
+        } else {
+            setEditNetPnlMoney("");
+            setEditCommissionMoney("");
+            setEditSwapMoney("");
+        }
         setError("");
     }
 
@@ -1976,6 +2327,9 @@ export default function App() {
         setEditCloseReasonOverride("");
         setEditManualReason("");
         setEditManualDescription("");
+        setEditNetPnlMoney("");
+        setEditCommissionMoney("");
+        setEditSwapMoney("");
         setError("");
     }
 
@@ -2277,7 +2631,16 @@ export default function App() {
         return res.json();
     }
 
-    async function closeTradeInline(trade, { exitPrice, closedAtLocal, closeReasonOverride, manualReason, manualDescription }) {
+    async function closeTradeInline(trade, {
+        exitPrice,
+        closedAtLocal,
+        closeReasonOverride,
+        manualReason,
+        manualDescription,
+        netPnlMoney,
+        commissionMoney,
+        swapMoney,
+    }) {
         const closedAtIso = toIsoFromLocal(closedAtLocal);
         if (!closedAtIso) {
             throw new Error("Closed time is required.");
@@ -2299,6 +2662,15 @@ export default function App() {
                 throw new Error("Description is required when Manual Reason is Other.");
             }
         }
+        if (netPnlMoney != null && !Number.isFinite(netPnlMoney)) {
+            throw new Error("Net P/L must be a valid number.");
+        }
+        if (commissionMoney != null && (!Number.isFinite(commissionMoney) || commissionMoney < 0)) {
+            throw new Error("Commission must be a valid non-negative number.");
+        }
+        if (swapMoney != null && !Number.isFinite(swapMoney)) {
+            throw new Error("Swap must be a valid number.");
+        }
 
         const createdAtIso = toIsoString(trade.createdAt);
         if (!createdAtIso) {
@@ -2319,6 +2691,9 @@ export default function App() {
             manualDescription: manualDescriptionToSend,
             stopLossPrice: trade.stopLossPrice ?? null,
             takeProfitPrice: trade.takeProfitPrice ?? null,
+            commissionMoney: commissionMoney ?? null,
+            swapMoney: swapMoney ?? null,
+            netPnlMoney: netPnlMoney ?? null,
             createdAt: createdAtIso,
             closedAt: closedAtIso,
         };
@@ -2464,6 +2839,36 @@ export default function App() {
 
         try {
             const isClosingEdit = Boolean(closedAtIso);
+            const existingTrade = trades.find((trade) => trade.id === id) || selectedTradeForDetails;
+            const existingNetPnl = existingTrade?.netPnlMoney ?? null;
+            const existingCommission = existingTrade?.commissionMoney ?? null;
+            const existingSwap = existingTrade?.swapMoney ?? null;
+            let nextNetPnl = existingNetPnl;
+            let nextCommission = existingCommission;
+            let nextSwap = existingSwap;
+            if (statsMode === "realized" && isClosingEdit) {
+                const netInput = editNetPnlMoney.trim();
+                const commissionInput = editCommissionMoney.trim();
+                const swapInput = editSwapMoney.trim();
+                const parsedNet = netInput === "" ? null : Number(netInput);
+                if (netInput !== "" && !Number.isFinite(parsedNet)) {
+                    setError("Net P/L must be a valid number.");
+                    return false;
+                }
+                const parsedCommission = commissionInput === "" ? null : Number(commissionInput);
+                if (commissionInput !== "" && (!Number.isFinite(parsedCommission) || parsedCommission < 0)) {
+                    setError("Commission must be a valid non-negative number.");
+                    return false;
+                }
+                const parsedSwap = swapInput === "" ? null : Number(swapInput);
+                if (swapInput !== "" && !Number.isFinite(parsedSwap)) {
+                    setError("Swap must be a valid number.");
+                    return false;
+                }
+                nextNetPnl = parsedNet;
+                nextCommission = parsedCommission;
+                nextSwap = parsedSwap;
+            }
             const manualReasonToSend = isClosingEdit && editCloseReasonOverride === "Manual" ? editManualReason : null;
             const manualDescriptionToSend =
                 isClosingEdit && editCloseReasonOverride === "Manual" && editManualReason === "Other"
@@ -2479,6 +2884,9 @@ export default function App() {
                 closeReasonOverride: isClosingEdit ? (editCloseReasonOverride || null) : null,
                 manualReason: manualReasonToSend,
                 manualDescription: manualDescriptionToSend,
+                commissionMoney: nextCommission,
+                swapMoney: nextSwap,
+                netPnlMoney: nextNetPnl,
                 createdAt: createdAtIso,
                 closedAt: closedAtIso,
             });
@@ -2656,7 +3064,7 @@ export default function App() {
         return true;
     }
 
-    const moneyLedger = useMemo(() => {
+    const strategyLedger = useMemo(() => {
         if (!accountSettings) return null;
         const startingBalance = Number(accountSettings.startingBalance);
         const riskPercent = Number(accountSettings.riskPercent);
@@ -2664,7 +3072,7 @@ export default function App() {
         if (!Number.isFinite(riskPercent) || riskPercent <= 0) return null;
         const riskFraction = riskPercent / 100;
         const closedTrades = trades
-            .filter((trade) => trade?.closedAt && Number.isFinite(computeOutcomeR(trade)))
+            .filter((trade) => trade?.closedAt && Number.isFinite(computeStrategyOutcomeR(trade)))
             .slice()
             .sort((a, b) => {
                 const aTime = new Date(a.closedAt).getTime();
@@ -2676,7 +3084,7 @@ export default function App() {
         let balance = startingBalance;
         let lastBalanceAfter = null;
         closedTrades.forEach((trade) => {
-            const rValue = computeOutcomeR(trade);
+            const rValue = computeStrategyOutcomeR(trade);
             if (!Number.isFinite(rValue)) return;
             const balanceBefore = balance;
             const riskAmount = balanceBefore * riskFraction;
@@ -2697,8 +3105,47 @@ export default function App() {
             lastBalanceAfter,
             hasClosedTrades: closedTrades.length > 0,
             byTrade,
+            orderedTrades: closedTrades,
+            riskFraction,
         };
     }, [accountSettings, trades]);
+
+    const realizedLedger = useMemo(() => {
+        if (!strategyLedger?.byTrade) return null;
+        const { startingBalance, orderedTrades, riskFraction, byTrade: strategyByTrade } = strategyLedger;
+        let balance = startingBalance;
+        let lastBalanceAfter = null;
+        const byTrade = new Map();
+        orderedTrades.forEach((trade) => {
+            const strategyEntry = strategyByTrade.get(trade.id);
+            if (!strategyEntry) return;
+            const balanceBefore = balance;
+            const riskAmount = balanceBefore * riskFraction;
+            const hasNetPnl = isNetPnlPresent(trade);
+            const pnlMoney = hasNetPnl ? Number(trade.netPnlMoney) : strategyEntry.pnlMoney;
+            const balanceAfter = balanceBefore + pnlMoney;
+            byTrade.set(trade.id, {
+                balanceBefore,
+                riskAmount,
+                pnlMoney,
+                balanceAfter,
+                isRealizedCovered: hasNetPnl,
+            });
+            balance = balanceAfter;
+            lastBalanceAfter = balanceAfter;
+        });
+        return {
+            startingBalance,
+            endingBalance: balance,
+            lastBalanceAfter,
+            hasClosedTrades: orderedTrades.length > 0,
+            byTrade,
+            orderedTrades,
+            riskFraction,
+        };
+    }, [strategyLedger]);
+
+    const activeLedger = statsMode === "realized" ? realizedLedger : strategyLedger;
 
     const filteredTrades = useMemo(() => {
         return trades.filter((trade) => {
@@ -2736,7 +3183,7 @@ export default function App() {
         let breakevenCount = 0;
         const epsilon = 1e-9;
         filteredTrades.forEach((trade) => {
-            const rValue = computeOutcomeR(trade);
+            const rValue = getOutcomeRForMode(trade);
             if (Number.isFinite(rValue)) {
                 outcomes.push(rValue);
                 if (trade?.closedAt) {
@@ -2776,12 +3223,27 @@ export default function App() {
             lossCount,
             breakevenCount,
         };
+    }, [filteredTrades, statsMode, realizedLedger]);
+
+    const realizedCoverage = useMemo(() => {
+        let total = 0;
+        let covered = 0;
+        filteredTrades.forEach((trade) => {
+            if (!trade?.closedAt) return;
+            const strategyR = computeStrategyOutcomeR(trade);
+            if (!Number.isFinite(strategyR)) return;
+            total += 1;
+            if (isNetPnlPresent(trade)) {
+                covered += 1;
+            }
+        });
+        return { total, covered };
     }, [filteredTrades]);
 
     const moneyMetrics = useMemo(() => {
-        if (!moneyLedger?.byTrade) return null;
+        if (!activeLedger?.byTrade) return null;
         const periodTrades = filteredTrades
-            .filter((trade) => moneyLedger.byTrade.has(trade.id))
+            .filter((trade) => activeLedger.byTrade.has(trade.id))
             .slice()
             .sort((a, b) => {
                 const aTime = new Date(a.closedAt).getTime();
@@ -2798,7 +3260,7 @@ export default function App() {
                 lossStreakR: null,
             };
         }
-        const firstEntry = moneyLedger.byTrade.get(periodTrades[0].id);
+        const firstEntry = activeLedger.byTrade.get(periodTrades[0].id);
         if (!firstEntry || !Number.isFinite(firstEntry.balanceBefore) || firstEntry.balanceBefore <= 0) {
             return {
                 tradeCount: 0,
@@ -2816,9 +3278,9 @@ export default function App() {
         let currentLossRunR = 0;
         let worstLossRunR = 0;
         periodTrades.forEach((trade) => {
-            const entry = moneyLedger.byTrade.get(trade.id);
+            const entry = activeLedger.byTrade.get(trade.id);
             if (!entry || !Number.isFinite(entry.pnlMoney)) return;
-            const rValue = computeOutcomeR(trade);
+            const rValue = getOutcomeRForMode(trade);
             if (Number.isFinite(rValue)) {
                 if (rValue < 0) {
                     currentLossRunR += rValue;
@@ -2843,19 +3305,19 @@ export default function App() {
             maxDrawdownPct,
             lossStreakR: worstLossRunR,
         };
-    }, [filteredTrades, moneyLedger]);
+    }, [filteredTrades, activeLedger, statsMode, realizedLedger]);
 
     const periodBalanceRange = useMemo(() => {
-        if (!moneyLedger?.byTrade) return null;
+        if (!activeLedger?.byTrade) return null;
         const isAllTime = datePreset === "all" && !fromDate && !toDate;
         if (isAllTime) {
             return {
-                start: moneyLedger.startingBalance,
-                end: moneyLedger.hasClosedTrades ? moneyLedger.lastBalanceAfter : moneyLedger.startingBalance,
+                start: activeLedger.startingBalance,
+                end: activeLedger.hasClosedTrades ? activeLedger.lastBalanceAfter : activeLedger.startingBalance,
             };
         }
         const periodTrades = filteredTrades
-            .filter((trade) => moneyLedger.byTrade.has(trade.id))
+            .filter((trade) => activeLedger.byTrade.has(trade.id))
             .slice()
             .sort((a, b) => {
                 const aTime = new Date(a.closedAt).getTime();
@@ -2864,19 +3326,27 @@ export default function App() {
                 return (a.id ?? 0) - (b.id ?? 0);
             });
         if (periodTrades.length === 0) return { start: null, end: null };
-        const first = moneyLedger.byTrade.get(periodTrades[0].id);
-        const last = moneyLedger.byTrade.get(periodTrades[periodTrades.length - 1].id);
+        const first = activeLedger.byTrade.get(periodTrades[0].id);
+        const last = activeLedger.byTrade.get(periodTrades[periodTrades.length - 1].id);
         if (!first || !last) return { start: null, end: null };
         return {
             start: first.balanceBefore,
             end: last.balanceAfter,
         };
-    }, [moneyLedger, filteredTrades, datePreset, fromDate, toDate]);
+    }, [activeLedger, filteredTrades, datePreset, fromDate, toDate]);
 
     const selectedTradeMoney = useMemo(() => {
-        if (!moneyLedger?.byTrade || !selectedTradeForDetails?.id) return null;
-        return moneyLedger.byTrade.get(selectedTradeForDetails.id) || null;
-    }, [moneyLedger, selectedTradeForDetails]);
+        if (!activeLedger?.byTrade || !selectedTradeForDetails?.id) return null;
+        return activeLedger.byTrade.get(selectedTradeForDetails.id) || null;
+    }, [activeLedger, selectedTradeForDetails]);
+    const selectedStrategyMoney = useMemo(() => {
+        if (!strategyLedger?.byTrade || !selectedTradeForDetails?.id) return null;
+        return strategyLedger.byTrade.get(selectedTradeForDetails.id) || null;
+    }, [strategyLedger, selectedTradeForDetails]);
+    const selectedRealizedMoney = useMemo(() => {
+        if (!realizedLedger?.byTrade || !selectedTradeForDetails?.id) return null;
+        return realizedLedger.byTrade.get(selectedTradeForDetails.id) || null;
+    }, [realizedLedger, selectedTradeForDetails]);
 
     const sortedTrades = useMemo(() => filteredTrades, [filteredTrades]);
     const totalPages = Math.ceil(sortedTrades.length / pageSize);
@@ -2900,6 +3370,7 @@ export default function App() {
         items.push(totalPages);
         return items;
     }, [currentPage, totalPages]);
+    const tableColSpan = statsMode === "realized" ? 9 : 8;
 
     const tradeCsvColumns = [
         { header: "Symbol", accessorFn: (trade) => formatSymbol(trade.symbol) },
@@ -2910,6 +3381,16 @@ export default function App() {
         { header: "SL dist", accessorKey: "slPips" },
         { header: "TP dist", accessorKey: "tpPips" },
         { header: "RR", accessorKey: "rrRatio" },
+        { header: "Net P/L", accessorFn: (trade) => (trade.netPnlMoney ?? null) },
+        { header: "Commission", accessorFn: (trade) => (trade.commissionMoney ?? null) },
+        { header: "Swap", accessorFn: (trade) => (trade.swapMoney ?? null) },
+        {
+            header: "Realized R",
+            accessorFn: (trade) => {
+                const realizedR = getRealizedRIfPresent(trade);
+                return Number.isFinite(realizedR) ? realizedR.toFixed(4) : null;
+            },
+        },
         { header: "Created", accessorFn: (trade) => toIsoString(trade.createdAt) },
         { header: "Closed", accessorFn: (trade) => toIsoString(trade.closedAt) },
         { header: "Duration", accessorFn: (trade) => formatDuration(trade.createdAt, trade.closedAt) },
@@ -3146,13 +3627,15 @@ export default function App() {
                                 className="user-chip"
                                 title="Based on closed trades only (no floating P/L)."
                             >
-                                <span className="user-label">Balance (Closed)</span>
+                                <span className="user-label">
+                                    {statsMode === "realized" ? "Balance (Broker)" : "Balance (Plan)"}
+                                </span>
                                 <span className="user-email">
-                                    {moneyLedger?.byTrade
+                                    {activeLedger?.byTrade
                                         ? formatMoneyValue(
-                                            moneyLedger.hasClosedTrades
-                                                ? moneyLedger.lastBalanceAfter
-                                                : moneyLedger.startingBalance,
+                                            activeLedger.hasClosedTrades
+                                                ? activeLedger.lastBalanceAfter
+                                                : activeLedger.startingBalance,
                                             accountSettings?.currency
                                         )
                                         : "\u2014"}
@@ -3405,10 +3888,36 @@ export default function App() {
                                         </p>
                                         <div className="trades-header-row">
                                             <div className="balance-pill">
-                                                Balance (Closed):{" "}
+                                                {statsMode === "realized" ? "Balance (Broker): " : "Balance (Plan): "}
                                                 {periodBalanceRange?.start != null && periodBalanceRange?.end != null
                                                     ? `${formatMoneyValue(periodBalanceRange.start, accountSettings?.currency)} \u2192 ${formatMoneyValue(periodBalanceRange.end, accountSettings?.currency)}`
                                                     : "\u2014"}
+                                            </div>
+                                        </div>
+                                        <div className="trades-header-row trades-header-row--mode">
+                                            <div className="summary-toggle" role="group" aria-label="Stats mode">
+                                                <button
+                                                    type="button"
+                                                    className={`btn btn-sm summary-toggle-btn${statsMode === "strategy" ? " is-active" : ""}`}
+                                                    onClick={() => setStatsMode("strategy")}
+                                                    title="Modeled performance based on R and your risk%. Assumes ideal fills and ignores broker costs."
+                                                >
+                                                    Strategy Plan
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    className={`btn btn-sm summary-toggle-btn${statsMode === "realized" ? " is-active" : ""}`}
+                                                    onClick={() => setStatsMode("realized")}
+                                                    title="Uses your entered Net P/L as truth where available. Coverage shows how many trades include broker data."
+                                                >
+                                                    Broker
+                                                </button>
+                                            </div>
+                                            <div
+                                                className={`summary-coverage${statsMode === "realized" ? " is-visible" : ""}`}
+                                                title="Trades with broker Net P/L entered. Others use strategy estimate."
+                                            >
+                                                Coverage: {realizedCoverage.covered}/{realizedCoverage.total}
                                             </div>
                                         </div>
                                     </div>
@@ -3585,6 +4094,7 @@ export default function App() {
                                         <th className="num">Entry</th>
                                         <th className="num">Exit</th>
                                         <th className="num">Outcome</th>
+                                        {statsMode === "realized" && <th className="num">Net P/L (Broker)</th>}
                                         <th>Created</th>
                                         <th>Closed date</th>
                                     </tr>
@@ -3632,6 +4142,7 @@ export default function App() {
                                             <th />
                                             <th />
                                             <th />
+                                            {statsMode === "realized" && <th />}
                                             <th />
                                             <th>
                                                 <select
@@ -3655,7 +4166,7 @@ export default function App() {
                                     <tbody>
                                     {sortedTrades.length === 0 ? (
                                         <tr>
-                                        <td className="empty" colSpan={8}>No trades yet.</td>
+                                        <td className="empty" colSpan={tableColSpan}>No trades yet.</td>
                                     </tr>
                                     ) : (
                                         pagedTrades.map((t) => (
@@ -3682,6 +4193,27 @@ export default function App() {
                                                     <td className="num">
                                                         <span className={getOutcomeClass(t)}>{formatOutcome(t)}</span>
                                                     </td>
+                                                    {statsMode === "realized" && (
+                                                        <td className="num">
+                                                            {(() => {
+                                                                const hasNet = isNetPnlPresent(t);
+                                                                const netValue = hasNet ? Number(t.netPnlMoney) : null;
+                                                                const display = formatMoneyNullable(netValue, accountSettings?.currency);
+                                                                const toneClass = hasNet
+                                                                    ? netValue > 0
+                                                                        ? " is-positive"
+                                                                        : netValue < 0
+                                                                            ? " is-negative"
+                                                                            : ""
+                                                                    : " is-muted";
+                                                                return (
+                                                                    <span className={`summary-value${toneClass}`}>
+                                                                        {display}
+                                                                    </span>
+                                                                );
+                                                            })()}
+                                                        </td>
+                                                    )}
                                                     <td>{formatDate(t.createdAt)}</td>
                                                     <td>{formatDate(t.closedAt)}</td>
                                                 </>
@@ -3743,6 +4275,7 @@ export default function App() {
                                 formatSymbol={formatSymbol}
                                 getSessionLabel={getSessionLabel}
                                 formatOutcome={formatOutcome}
+                                formatRValue={formatRValue}
                                 onCloseTrade={closeTradeInline}
                                 onOpenReview={(trade) => openReviewModal(trade)}
                                 toDateTimeLocalValue={toDateTimeLocalValue}
@@ -3773,8 +4306,17 @@ export default function App() {
                                 setEditManualReason={setEditManualReason}
                                 editManualDescription={editManualDescription}
                                 setEditManualDescription={setEditManualDescription}
+                                editNetPnlMoney={editNetPnlMoney}
+                                setEditNetPnlMoney={setEditNetPnlMoney}
+                                editCommissionMoney={editCommissionMoney}
+                                setEditCommissionMoney={setEditCommissionMoney}
+                                editSwapMoney={editSwapMoney}
+                                setEditSwapMoney={setEditSwapMoney}
                                 errorMessage={error}
                                 moneySummary={selectedTradeMoney}
+                                strategyMoney={selectedStrategyMoney}
+                                realizedMoney={selectedRealizedMoney}
+                                statsMode={statsMode}
                                 moneyCurrency={accountSettings?.currency}
                                 panelRef={leftPanelRef}
                                 otherPanelRef={rightPanelRef}

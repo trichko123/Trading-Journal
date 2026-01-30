@@ -34,11 +34,12 @@ public class TradeServiceImpl implements TradeService {
     }
 
     @Override
-    public Trade create(String symbol, String direction, BigDecimal entryPrice, BigDecimal exitPrice, String closeReasonOverride, String manualReason, String manualDescription, BigDecimal stopLossPrice, BigDecimal takeProfitPrice, Instant closedAt) {
+    public Trade create(String symbol, String direction, BigDecimal entryPrice, BigDecimal exitPrice, String closeReasonOverride, String manualReason, String manualDescription, BigDecimal stopLossPrice, BigDecimal takeProfitPrice, BigDecimal commissionMoney, BigDecimal swapMoney, BigDecimal netPnlMoney, Instant closedAt) {
         if (closedAt == null) {
             exitPrice = null;
         }
         validateTradeInput(symbol, direction, entryPrice, exitPrice, stopLossPrice, takeProfitPrice);
+        validateBrokerFields(commissionMoney, swapMoney, netPnlMoney);
         validateClosedTrade(exitPrice, closedAt);
         Metrics metrics = computeMetrics(symbol, direction, entryPrice, stopLossPrice, takeProfitPrice);
         String normalizedCloseReason = normalizeCloseReason(closeReasonOverride);
@@ -54,6 +55,9 @@ public class TradeServiceImpl implements TradeService {
         t.setManualDescription(manualDetails.manualDescription());
         t.setStopLossPrice(stopLossPrice);
         t.setTakeProfitPrice(takeProfitPrice);
+        t.setCommissionMoney(commissionMoney);
+        t.setSwapMoney(swapMoney);
+        t.setNetPnlMoney(netPnlMoney);
         t.setSlPips(metrics.slPips());
         t.setTpPips(metrics.tpPips());
         t.setRrRatio(metrics.rrRatio());
@@ -83,11 +87,12 @@ public class TradeServiceImpl implements TradeService {
     }
 
     @Override
-    public Trade update(Long id, String symbol, String direction, BigDecimal entryPrice, BigDecimal exitPrice, String closeReasonOverride, String manualReason, String manualDescription, BigDecimal stopLossPrice, BigDecimal takeProfitPrice, Instant closedAt, Instant createdAt) {
+    public Trade update(Long id, String symbol, String direction, BigDecimal entryPrice, BigDecimal exitPrice, String closeReasonOverride, String manualReason, String manualDescription, BigDecimal stopLossPrice, BigDecimal takeProfitPrice, BigDecimal commissionMoney, BigDecimal swapMoney, BigDecimal netPnlMoney, Instant closedAt, Instant createdAt) {
         if (closedAt == null) {
             exitPrice = null;
         }
         validateTradeInput(symbol, direction, entryPrice, exitPrice, stopLossPrice, takeProfitPrice);
+        validateBrokerFields(commissionMoney, swapMoney, netPnlMoney);
         validateClosedTrade(exitPrice, closedAt);
         Metrics metrics = computeMetrics(symbol, direction, entryPrice, stopLossPrice, takeProfitPrice);
 
@@ -115,6 +120,9 @@ public class TradeServiceImpl implements TradeService {
         }
         t.setStopLossPrice(stopLossPrice);
         t.setTakeProfitPrice(takeProfitPrice);
+        t.setCommissionMoney(commissionMoney);
+        t.setSwapMoney(swapMoney);
+        t.setNetPnlMoney(netPnlMoney);
         t.setSlPips(metrics.slPips());
         t.setTpPips(metrics.tpPips());
         t.setRrRatio(metrics.rrRatio());
@@ -203,6 +211,12 @@ public class TradeServiceImpl implements TradeService {
             if (exitPrice == null || exitPrice.signum() <= 0) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Exit price must be positive when closing a trade");
             }
+        }
+    }
+
+    private void validateBrokerFields(BigDecimal commissionMoney, BigDecimal swapMoney, BigDecimal netPnlMoney) {
+        if (commissionMoney != null && commissionMoney.signum() < 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Commission must be zero or positive");
         }
     }
 
