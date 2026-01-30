@@ -42,8 +42,25 @@
 
 .table-header-actions {
   display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.table-header-top {
+  display: flex;
   align-items: center;
   gap: 12px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.table-header-filters {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   flex-wrap: wrap;
   justify-content: flex-end;
 }
@@ -58,6 +75,35 @@
   color: #9aa3b2;
   margin: 0;
   font-size: 14px;
+}
+
+.trades-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+.trades-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.trades-header .balance-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  color: #8f98aa;
+  background: #0f1420;
+  border: 1px solid #23283b;
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.18);
 }
 
 .eyebrow {
@@ -99,6 +145,47 @@
   display: flex;
   gap: 8px;
   align-items: center;
+}
+
+.account-menu {
+  position: relative;
+}
+
+.account-dropdown {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  min-width: 180px;
+  padding: 6px;
+  background: #0f1420;
+  border: 1px solid #23283b;
+  border-radius: 12px;
+  box-shadow: 0 14px 26px rgba(0, 0, 0, 0.35);
+  z-index: 20;
+}
+
+.account-item {
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  color: #e7ebf2;
+  font-size: 13px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.account-item:hover,
+.account-item:focus-visible {
+  background: #20273a;
+  outline: none;
+}
+
+.account-divider {
+  height: 1px;
+  margin: 6px;
+  background: #23283b;
 }
 
 .btn {
@@ -263,7 +350,7 @@
 .filter-bar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 12px;
   padding: 6px 2px 12px;
 }
@@ -311,6 +398,12 @@
 .summary-value.is-muted {
   color: #64748b;
   font-weight: 500;
+}
+
+.summary-sep {
+  color: #64748b;
+  font-weight: 500;
+  padding: 0 2px;
 }
 
 .summary-note {
