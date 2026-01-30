@@ -20,10 +20,12 @@ public class TradeServiceImpl implements TradeService {
 
     private final TradeRepository trades;
     private final UserRepository users;
+    private final com.example.tradingjournal.service.TradeAttachmentService attachments;
 
-    public TradeServiceImpl(TradeRepository trades, UserRepository users) {
+    public TradeServiceImpl(TradeRepository trades, UserRepository users, com.example.tradingjournal.service.TradeAttachmentService attachments) {
         this.trades = trades;
         this.users = users;
+        this.attachments = attachments;
     }
 
     private User currentUser() {
@@ -144,6 +146,7 @@ public class TradeServiceImpl implements TradeService {
     @Override
     public void delete(Long id) {
         Trade t = findOwnedTrade(id);
+        attachments.deleteByTradeId(t.getId());
         trades.delete(t);
     }
 
