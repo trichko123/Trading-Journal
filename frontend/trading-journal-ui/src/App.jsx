@@ -1420,6 +1420,7 @@ export default function App() {
     const [accountSettingsCurrency, setAccountSettingsCurrency] = useState("");
     const [accountSettingsError, setAccountSettingsError] = useState("");
     const [isAccountSettingsSaving, setIsAccountSettingsSaving] = useState(false);
+    const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
 
     const [trades, setTrades] = useState([]);
     const [symbol, setSymbol] = useState("GBPJPY");
@@ -1468,6 +1469,8 @@ export default function App() {
     const attachmentInputRef = useRef(null);
     const leftPanelRef = useRef(null);
     const rightPanelRef = useRef(null);
+    const accountMenuRef = useRef(null);
+    const accountMenuButtonRef = useRef(null);
     const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
     const [reviewTradeId, setReviewTradeId] = useState(null);
     const [reviewFollowedPlan, setReviewFollowedPlan] = useState("");
@@ -3000,6 +3003,31 @@ export default function App() {
     }, [isAccountSettingsOpen]);
 
     useEffect(() => {
+        if (!isAccountMenuOpen) return undefined;
+        const handleKeydown = (event) => {
+            if (event.key === "Escape") {
+                setIsAccountMenuOpen(false);
+            }
+        };
+        const handlePointerDown = (event) => {
+            const target = event.target;
+            if (
+                accountMenuRef.current?.contains(target)
+                || accountMenuButtonRef.current?.contains(target)
+            ) {
+                return;
+            }
+            setIsAccountMenuOpen(false);
+        };
+        window.addEventListener("keydown", handleKeydown);
+        window.addEventListener("mousedown", handlePointerDown);
+        return () => {
+            window.removeEventListener("keydown", handleKeydown);
+            window.removeEventListener("mousedown", handlePointerDown);
+        };
+    }, [isAccountMenuOpen]);
+
+    useEffect(() => {
         if (!lightboxUrl) return;
         setLightboxScale(1);
         setLightboxOffset({ x: 0, y: 0 });
@@ -3105,7 +3133,6 @@ export default function App() {
             <div className="stack">
                 <div className="card header-card">
                     <div>
-                        <p className="eyebrow">Trading Journal</p>
                         <h1 className="title">Trading Journal</h1>
                         <p className="subtitle">Track entries, stops, targets, and session context in one place.</p>
                     </div>
@@ -3140,10 +3167,43 @@ export default function App() {
                                 >
                                     Refresh
                                 </button>
-                                <button className="btn btn-ghost" onClick={openAccountSettingsModal}>
-                                    Account Settings
-                                </button>
-                                <button className="btn btn-ghost" onClick={logout}>Logout</button>
+                                <div className="account-menu" ref={accountMenuRef}>
+                                    <button
+                                        className="btn btn-ghost"
+                                        type="button"
+                                        ref={accountMenuButtonRef}
+                                        aria-haspopup="menu"
+                                        aria-expanded={isAccountMenuOpen}
+                                        onClick={() => setIsAccountMenuOpen((open) => !open)}
+                                    >
+                                        Account v
+                                    </button>
+                                    {isAccountMenuOpen && (
+                                        <div className="account-dropdown" role="menu">
+                                            <button
+                                                className="account-item"
+                                                type="button"
+                                                onClick={() => {
+                                                    setIsAccountMenuOpen(false);
+                                                    openAccountSettingsModal();
+                                                }}
+                                            >
+                                                Account Settings
+                                            </button>
+                                            <div className="account-divider" />
+                                            <button
+                                                className="account-item"
+                                                type="button"
+                                                onClick={() => {
+                                                    setIsAccountMenuOpen(false);
+                                                    logout();
+                                                }}
+                                            >
+                                                Logout
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         </div>
                     ) : null}
@@ -3338,31 +3398,49 @@ export default function App() {
 
                         <div className="card">
                                 <div className="card-header">
-                                    <div>
+                                    <div className="trades-header">
                                         <h2>Trades</h2>
                                         <p className="subtitle">
                                             {trades.length} total | {filteredTrades.length} shown
-                                            {" \u2022 "}
-                                            Balance:{" "}
-                                            {periodBalanceRange?.start != null && periodBalanceRange?.end != null
-                                                ? `${formatMoneyValue(periodBalanceRange.start, accountSettings?.currency)} \u2192 ${formatMoneyValue(periodBalanceRange.end, accountSettings?.currency)}`
-                                                : "\u2014"}
                                         </p>
+                                        <div className="trades-header-row">
+                                            <div className="balance-pill">
+                                                Balance (Closed):{" "}
+                                                {periodBalanceRange?.start != null && periodBalanceRange?.end != null
+                                                    ? `${formatMoneyValue(periodBalanceRange.start, accountSettings?.currency)} \u2192 ${formatMoneyValue(periodBalanceRange.end, accountSettings?.currency)}`
+                                                    : "\u2014"}
+                                            </div>
+                                        </div>
                                     </div>
                                     <div className="table-header-actions">
-                                        {isLoading && <span className="loading">Loading trades...</span>}
-                                        <button
-                                            className="btn btn-ghost btn-sm"
-                                            type="button"
-                                            onClick={handleExportCsv}
-                                            disabled={isExporting}
-                                        >
-                                            {isExporting ? "Exporting..." : "Export CSV"}
-                                        </button>
+                                        <div className="table-header-top">
+                                            {isLoading && <span className="loading">Loading trades...</span>}
+                                            <button
+                                                className="btn btn-ghost btn-sm"
+                                                type="button"
+                                                onClick={handleExportCsv}
+                                                disabled={isExporting}
+                                            >
+                                                {isExporting ? "Exporting..." : "Export CSV"}
+                                            </button>
+                                        </div>
+                                        <div className="table-header-filters">
+                                            <button
+                                                className="btn btn-ghost btn-sm"
+                                                type="button"
+                                                onClick={() => setShowFilters((v) => !v)}
+                                            >
+                                                {showFilters ? "Hide filters" : "Show filters"}
+                                            </button>
+                                            {showFilters && (
+                                                <button className="btn btn-ghost btn-sm" type="button" onClick={clearFilters}>
+                                                    Clear filters
+                                                </button>
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
                                 <div className="filter-bar">
-                                    <span className="filter-title">Filter</span>
                                     <div className="filter-actions">
                                         {showFilters && datePreset === "custom" && (
                                             <div className="filter-range">
@@ -3385,18 +3463,6 @@ export default function App() {
                                                     />
                                                 </label>
                                             </div>
-                                        )}
-                                        <button
-                                            className="btn btn-ghost btn-sm"
-                                            type="button"
-                                            onClick={() => setShowFilters((v) => !v)}
-                                        >
-                                            {showFilters ? "Hide filters" : "Show filters"}
-                                        </button>
-                                        {showFilters && (
-                                            <button className="btn btn-ghost btn-sm" type="button" onClick={clearFilters}>
-                                                Clear filters
-                                            </button>
                                         )}
                                     </div>
                                 </div>
@@ -3490,32 +3556,18 @@ export default function App() {
                                         </span>
                                     </div>
                                     <div className="summary-stat">
-                                        <span className={`summary-value${summaryStats.winCount + summaryStats.lossCount + summaryStats.breakevenCount ? "" : " is-muted"}`}>
-                                            {summaryStats.winCount + summaryStats.lossCount + summaryStats.breakevenCount ? (
-                                                <>
-                                                    <span className="summary-label">Wins</span>{" "}
-                                                    <span className="summary-value is-positive">{summaryStats.winCount}</span>
-                                                </>
-                                            ) : (
-                                                emDash
-                                            )}
-                                        </span>
-                                    </div>
-                                    <div className="summary-stat">
-                                        <span className="summary-label">Losses</span>
-                                        <span className={`summary-value${summaryStats.lossCount ? " is-negative" : " is-muted"}`}>
-                                            {summaryStats.winCount + summaryStats.lossCount + summaryStats.breakevenCount
-                                                ? summaryStats.lossCount
-                                                : emDash}
-                                        </span>
-                                    </div>
-                                    <div className="summary-stat">
-                                        <span className="summary-label">BreakEvens</span>
-                                        <span className={`summary-value${summaryStats.breakevenCount ? "" : " is-muted"}`}>
-                                            {summaryStats.winCount + summaryStats.lossCount + summaryStats.breakevenCount
-                                                ? summaryStats.breakevenCount
-                                                : emDash}
-                                        </span>
+                                        <span className="summary-label">W/L/B</span>
+                                        {summaryStats.winCount + summaryStats.lossCount + summaryStats.breakevenCount ? (
+                                            <span className="summary-value">
+                                                <span className="summary-value is-positive">{summaryStats.winCount}</span>
+                                                <span className="summary-sep">/</span>
+                                                <span className="summary-value is-negative">{summaryStats.lossCount}</span>
+                                                <span className="summary-sep">/</span>
+                                                <span className="summary-value is-muted">{summaryStats.breakevenCount}</span>
+                                            </span>
+                                        ) : (
+                                            <span className="summary-value is-muted">{emDash}</span>
+                                        )}
                                     </div>
                                     {summaryStats.excluded > 0 && (
                                         <div className="summary-note">
