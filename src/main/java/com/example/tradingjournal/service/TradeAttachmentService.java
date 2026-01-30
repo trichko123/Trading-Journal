@@ -11,4 +11,5 @@ public interface TradeAttachmentService {
     List<TradeAttachment> listForTrade(Long tradeId);
     TradeAttachment updateTimeframe(Long attachmentId, String timeframe);
     void delete(Long attachmentId);
+    void deleteByTradeId(Long tradeId);
 }

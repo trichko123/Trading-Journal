@@ -105,6 +105,21 @@ public class TradeAttachmentServiceImpl implements TradeAttachmentService {
         attachments.delete(attachment);
     }
 
+    @Override
+    public void deleteByTradeId(Long tradeId) {
+        findOwnedTrade(tradeId);
+        List<TradeAttachment> tradeAttachments = attachments.findAllByTradeIdOrderByCreatedAtDesc(tradeId);
+        for (TradeAttachment attachment : tradeAttachments) {
+            Path path = uploadRoot.resolve(attachment.getRelativePath()).normalize();
+            try {
+                Files.deleteIfExists(path);
+            } catch (IOException ex) {
+                throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to delete file");
+            }
+            attachments.delete(attachment);
+        }
+    }
+
     private void validateFile(MultipartFile file) {
         if (file == null || file.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "File is required");

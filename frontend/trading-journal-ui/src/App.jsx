@@ -62,6 +62,32 @@ function DetailRow({ label, value, isMuted = false, isEditing = false }) {
     );
 }
 
+function formatMoneyValue(value, currencyCode, fallbackSymbol = "$") {
+    if (!Number.isFinite(value)) return "\u2014";
+    const sign = value > 0 ? "+" : value < 0 ? "-" : "";
+    const absValue = Math.abs(value);
+    if (currencyCode) {
+        try {
+            const formatted = new Intl.NumberFormat(undefined, {
+                style: "currency",
+                currency: currencyCode,
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+            }).format(absValue);
+            return `${sign}${formatted}`;
+        } catch {
+            // Fall through to simple formatting
+        }
+    }
+    return `${sign}${fallbackSymbol}${absValue.toFixed(2)}`;
+}
+
+function formatPercentValue(value, decimals = 2) {
+    if (!Number.isFinite(value)) return "\u2014";
+    const sign = value > 0 ? "+" : value < 0 ? "-" : "";
+    return `${sign}${Math.abs(value).toFixed(decimals)}%`;
+}
+
 function TradeDetailsPanelLeft({
     trade,
     open,
@@ -102,6 +128,8 @@ function TradeDetailsPanelLeft({
     editManualDescription,
     setEditManualDescription,
     errorMessage,
+    moneySummary,
+    moneyCurrency,
     panelRef: externalPanelRef,
     otherPanelRef,
     isAttachModalOpen,
@@ -342,6 +370,11 @@ function TradeDetailsPanelLeft({
         if (upper === "MAYBE") return "Maybe";
         return value;
     };
+    const pnlValue = moneySummary?.pnlMoney;
+    const balanceAfterValue = moneySummary?.balanceAfter;
+    const hasMoneyValues = Number.isFinite(pnlValue) && Number.isFinite(balanceAfterValue);
+    const pnlDisplay = hasMoneyValues ? formatMoneyValue(pnlValue, moneyCurrency) : emDash;
+    const balanceDisplay = hasMoneyValues ? formatMoneyValue(balanceAfterValue, moneyCurrency) : emDash;
 
     return (
         <>
@@ -386,6 +419,13 @@ function TradeDetailsPanelLeft({
                     </div>
 
                     <div className="drawer-sections">
+                        <div className="drawer-section">
+                            <h4 className="drawer-section-title">Performance</h4>
+                            <div className="drawer-section-body">
+                                <DetailRow label="P/L" value={pnlDisplay} isMuted={!hasMoneyValues} />
+                                <DetailRow label="Balance after" value={balanceDisplay} isMuted={!hasMoneyValues} />
+                            </div>
+                        </div>
                         <div className="drawer-section">
                             <h4 className="drawer-section-title">Levels</h4>
                             <div className="drawer-section-body">
@@ -1373,6 +1413,13 @@ export default function App() {
     const [password, setPassword] = useState("pass1234");
     const [token, setToken] = useState(localStorage.getItem("token") || "");
     const [authMode, setAuthMode] = useState("login");
+    const [accountSettings, setAccountSettings] = useState(null);
+    const [isAccountSettingsOpen, setIsAccountSettingsOpen] = useState(false);
+    const [accountSettingsBalance, setAccountSettingsBalance] = useState("");
+    const [accountSettingsRiskPercent, setAccountSettingsRiskPercent] = useState("");
+    const [accountSettingsCurrency, setAccountSettingsCurrency] = useState("");
+    const [accountSettingsError, setAccountSettingsError] = useState("");
+    const [isAccountSettingsSaving, setIsAccountSettingsSaving] = useState(false);
 
     const [trades, setTrades] = useState([]);
     const [symbol, setSymbol] = useState("GBPJPY");
@@ -1456,9 +1503,6 @@ export default function App() {
     const [showFilters, setShowFilters] = useState(false);
     const [fromDate, setFromDate] = useState("");
     const [toDate, setToDate] = useState("");
-    const [closedDatePreset, setClosedDatePreset] = useState("all");
-    const [closedFromDate, setClosedFromDate] = useState("");
-    const [closedToDate, setClosedToDate] = useState("");
     const [currentPage, setCurrentPage] = useState(1);
     const pageSize = 10;
     const refreshBlocked = refreshBlockedUntil && Date.now() < refreshBlockedUntil;
@@ -1763,6 +1807,7 @@ export default function App() {
         setToken("");
         localStorage.removeItem("token");
         setTrades([]);
+        setAccountSettings(null);
     }
 
     useEffect(() => {
@@ -1850,6 +1895,28 @@ export default function App() {
         }
     }
 
+    async function loadAccountSettings() {
+        if (!token) return;
+        setAccountSettingsError("");
+        try {
+            const res = await fetch(`${API}/account-settings`, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            if (res.status === 404) {
+                setAccountSettings(null);
+                return;
+            }
+            if (!res.ok) {
+                const txt = await res.text();
+                throw new Error(`Load account settings failed (${res.status}): ${txt}`);
+            }
+            const data = await res.json();
+            setAccountSettings(data);
+        } catch (err) {
+            setAccountSettingsError(String(err));
+        }
+    }
+
     async function loadAttachments(tradeId) {
         if (!tradeId) return;
         try {
@@ -1934,6 +2001,60 @@ export default function App() {
         resetAttachmentPreview();
         setIsAttachmentDragOver(false);
         setIsUploadingAttachment(false);
+    }
+
+    function openAccountSettingsModal() {
+        setAccountSettingsError("");
+        setAccountSettingsBalance(accountSettings?.startingBalance?.toString() || "");
+        setAccountSettingsRiskPercent(accountSettings?.riskPercent?.toString() || "");
+        setAccountSettingsCurrency(accountSettings?.currency ?? "");
+        setIsAccountSettingsOpen(true);
+    }
+
+    function closeAccountSettingsModal() {
+        setIsAccountSettingsOpen(false);
+        setAccountSettingsError("");
+    }
+
+    async function saveAccountSettings() {
+        if (isAccountSettingsSaving) return;
+        setAccountSettingsError("");
+        const startingBalance = Number(accountSettingsBalance);
+        const riskPercent = Number(accountSettingsRiskPercent);
+        if (!Number.isFinite(startingBalance) || startingBalance <= 0) {
+            setAccountSettingsError("Starting balance must be positive.");
+            return;
+        }
+        if (!Number.isFinite(riskPercent) || riskPercent <= 0 || riskPercent > 100) {
+            setAccountSettingsError("Risk % must be between 0 and 100.");
+            return;
+        }
+        setIsAccountSettingsSaving(true);
+        try {
+            const res = await fetch(`${API}/account-settings`, {
+                method: "PUT",
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify({
+                    startingBalance,
+                    riskPercent,
+                    currency: accountSettingsCurrency || null,
+                }),
+            });
+            if (!res.ok) {
+                const txt = await res.text();
+                throw new Error(`Save account settings failed (${res.status}): ${txt}`);
+            }
+            const data = await res.json();
+            setAccountSettings(data);
+            setIsAccountSettingsOpen(false);
+        } catch (err) {
+            setAccountSettingsError(String(err).replace(/^Error:\s*/, ""));
+        } finally {
+            setIsAccountSettingsSaving(false);
+        }
     }
 
     function handleAttachmentFile(file) {
@@ -2532,6 +2653,50 @@ export default function App() {
         return true;
     }
 
+    const moneyLedger = useMemo(() => {
+        if (!accountSettings) return null;
+        const startingBalance = Number(accountSettings.startingBalance);
+        const riskPercent = Number(accountSettings.riskPercent);
+        if (!Number.isFinite(startingBalance) || startingBalance <= 0) return null;
+        if (!Number.isFinite(riskPercent) || riskPercent <= 0) return null;
+        const riskFraction = riskPercent / 100;
+        const closedTrades = trades
+            .filter((trade) => trade?.closedAt && Number.isFinite(computeOutcomeR(trade)))
+            .slice()
+            .sort((a, b) => {
+                const aTime = new Date(a.closedAt).getTime();
+                const bTime = new Date(b.closedAt).getTime();
+                if (aTime !== bTime) return aTime - bTime;
+                return (a.id ?? 0) - (b.id ?? 0);
+            });
+        const byTrade = new Map();
+        let balance = startingBalance;
+        let lastBalanceAfter = null;
+        closedTrades.forEach((trade) => {
+            const rValue = computeOutcomeR(trade);
+            if (!Number.isFinite(rValue)) return;
+            const balanceBefore = balance;
+            const riskAmount = balanceBefore * riskFraction;
+            const pnlMoney = rValue * riskAmount;
+            const balanceAfter = balanceBefore + pnlMoney;
+            byTrade.set(trade.id, {
+                balanceBefore,
+                riskAmount,
+                pnlMoney,
+                balanceAfter,
+            });
+            balance = balanceAfter;
+            lastBalanceAfter = balanceAfter;
+        });
+        return {
+            startingBalance,
+            endingBalance: balance,
+            lastBalanceAfter,
+            hasClosedTrades: closedTrades.length > 0,
+            byTrade,
+        };
+    }, [accountSettings, trades]);
+
     const filteredTrades = useMemo(() => {
         return trades.filter((trade) => {
             if (filters.symbol !== "all" && trade.symbol !== filters.symbol) {
@@ -2549,18 +2714,15 @@ export default function App() {
                 const label = getSessionLabel(trade.createdAt);
                 if (label !== filters.session) return false;
             }
-            if (!matchesDatePreset(trade.createdAt, datePreset, fromDate, toDate)) {
+            if (datePreset !== "all" && !trade.closedAt) {
                 return false;
             }
-            if (closedDatePreset !== "all" && !trade.closedAt) {
-                return false;
-            }
-            if (!matchesDatePreset(trade.closedAt, closedDatePreset, closedFromDate, closedToDate)) {
+            if (!matchesDatePreset(trade.closedAt, datePreset, fromDate, toDate)) {
                 return false;
             }
             return true;
         });
-    }, [trades, filters, datePreset, fromDate, toDate, closedDatePreset, closedFromDate, closedToDate]);
+    }, [trades, filters, datePreset, fromDate, toDate]);
 
     const summaryStats = useMemo(() => {
         const outcomes = [];
@@ -2612,6 +2774,106 @@ export default function App() {
             breakevenCount,
         };
     }, [filteredTrades]);
+
+    const moneyMetrics = useMemo(() => {
+        if (!moneyLedger?.byTrade) return null;
+        const periodTrades = filteredTrades
+            .filter((trade) => moneyLedger.byTrade.has(trade.id))
+            .slice()
+            .sort((a, b) => {
+                const aTime = new Date(a.closedAt).getTime();
+                const bTime = new Date(b.closedAt).getTime();
+                if (aTime !== bTime) return aTime - bTime;
+                return (a.id ?? 0) - (b.id ?? 0);
+            });
+        if (periodTrades.length === 0) {
+            return {
+                tradeCount: 0,
+                totalPnl: null,
+                returnPct: null,
+                maxDrawdownPct: null,
+                lossStreakR: null,
+            };
+        }
+        const firstEntry = moneyLedger.byTrade.get(periodTrades[0].id);
+        if (!firstEntry || !Number.isFinite(firstEntry.balanceBefore) || firstEntry.balanceBefore <= 0) {
+            return {
+                tradeCount: 0,
+                totalPnl: null,
+                returnPct: null,
+                maxDrawdownPct: null,
+                lossStreakR: null,
+            };
+        }
+        const startEquity = firstEntry.balanceBefore;
+        let equity = startEquity;
+        let peakEquity = startEquity;
+        let maxDrawdownPct = 0;
+        let totalPnl = 0;
+        let currentLossRunR = 0;
+        let worstLossRunR = 0;
+        periodTrades.forEach((trade) => {
+            const entry = moneyLedger.byTrade.get(trade.id);
+            if (!entry || !Number.isFinite(entry.pnlMoney)) return;
+            const rValue = computeOutcomeR(trade);
+            if (Number.isFinite(rValue)) {
+                if (rValue < 0) {
+                    currentLossRunR += rValue;
+                    worstLossRunR = Math.min(worstLossRunR, currentLossRunR);
+                } else {
+                    currentLossRunR = 0;
+                }
+            }
+            totalPnl += entry.pnlMoney;
+            equity += entry.pnlMoney;
+            peakEquity = Math.max(peakEquity, equity);
+            const drawdownPct = peakEquity > 0 ? ((equity - peakEquity) / peakEquity) * 100 : 0;
+            if (drawdownPct < maxDrawdownPct) {
+                maxDrawdownPct = drawdownPct;
+            }
+        });
+        const returnPct = startEquity > 0 ? (totalPnl / startEquity) * 100 : null;
+        return {
+            tradeCount: periodTrades.length,
+            totalPnl,
+            returnPct,
+            maxDrawdownPct,
+            lossStreakR: worstLossRunR,
+        };
+    }, [filteredTrades, moneyLedger]);
+
+    const periodBalanceRange = useMemo(() => {
+        if (!moneyLedger?.byTrade) return null;
+        const isAllTime = datePreset === "all" && !fromDate && !toDate;
+        if (isAllTime) {
+            return {
+                start: moneyLedger.startingBalance,
+                end: moneyLedger.hasClosedTrades ? moneyLedger.lastBalanceAfter : moneyLedger.startingBalance,
+            };
+        }
+        const periodTrades = filteredTrades
+            .filter((trade) => moneyLedger.byTrade.has(trade.id))
+            .slice()
+            .sort((a, b) => {
+                const aTime = new Date(a.closedAt).getTime();
+                const bTime = new Date(b.closedAt).getTime();
+                if (aTime !== bTime) return aTime - bTime;
+                return (a.id ?? 0) - (b.id ?? 0);
+            });
+        if (periodTrades.length === 0) return { start: null, end: null };
+        const first = moneyLedger.byTrade.get(periodTrades[0].id);
+        const last = moneyLedger.byTrade.get(periodTrades[periodTrades.length - 1].id);
+        if (!first || !last) return { start: null, end: null };
+        return {
+            start: first.balanceBefore,
+            end: last.balanceAfter,
+        };
+    }, [moneyLedger, filteredTrades, datePreset, fromDate, toDate]);
+
+    const selectedTradeMoney = useMemo(() => {
+        if (!moneyLedger?.byTrade || !selectedTradeForDetails?.id) return null;
+        return moneyLedger.byTrade.get(selectedTradeForDetails.id) || null;
+    }, [moneyLedger, selectedTradeForDetails]);
 
     const sortedTrades = useMemo(() => filteredTrades, [filteredTrades]);
     const totalPages = Math.ceil(sortedTrades.length / pageSize);
@@ -2672,18 +2934,18 @@ export default function App() {
         setDatePreset("all");
         setFromDate("");
         setToDate("");
-        setClosedDatePreset("all");
-        setClosedFromDate("");
-        setClosedToDate("");
     }
 
     useEffect(() => {
-        if (token) loadTrades({ force: true });
+        if (token) {
+            loadTrades({ force: true });
+            loadAccountSettings();
+        }
     }, [token]);
 
     useEffect(() => {
         setCurrentPage(1);
-    }, [filters, datePreset, fromDate, toDate, closedDatePreset, closedFromDate, closedToDate]);
+    }, [filters, datePreset, fromDate, toDate]);
 
     useEffect(() => {
         if (totalPages === 0) {
@@ -2725,6 +2987,17 @@ export default function App() {
         window.addEventListener("keydown", handleKeydown);
         return () => window.removeEventListener("keydown", handleKeydown);
     }, [isRiskCalcOpen]);
+
+    useEffect(() => {
+        if (!isAccountSettingsOpen) return undefined;
+        const handleKeydown = (event) => {
+            if (event.key === "Escape") {
+                closeAccountSettingsModal();
+            }
+        };
+        window.addEventListener("keydown", handleKeydown);
+        return () => window.removeEventListener("keydown", handleKeydown);
+    }, [isAccountSettingsOpen]);
 
     useEffect(() => {
         if (!lightboxUrl) return;
@@ -2842,6 +3115,22 @@ export default function App() {
                                 <span className="user-label">Signed in</span>
                                 <span className="user-email">{email}</span>
                             </div>
+                            <div
+                                className="user-chip"
+                                title="Based on closed trades only (no floating P/L)."
+                            >
+                                <span className="user-label">Balance (Closed)</span>
+                                <span className="user-email">
+                                    {moneyLedger?.byTrade
+                                        ? formatMoneyValue(
+                                            moneyLedger.hasClosedTrades
+                                                ? moneyLedger.lastBalanceAfter
+                                                : moneyLedger.startingBalance,
+                                            accountSettings?.currency
+                                        )
+                                        : "\u2014"}
+                                </span>
+                            </div>
                             <div className="actions">
                                 <button
                                     className="btn"
@@ -2850,6 +3139,9 @@ export default function App() {
                                     title={refreshBlocked ? `Please wait ${refreshCooldownSeconds}s` : "Refresh trades"}
                                 >
                                     Refresh
+                                </button>
+                                <button className="btn btn-ghost" onClick={openAccountSettingsModal}>
+                                    Account Settings
                                 </button>
                                 <button className="btn btn-ghost" onClick={logout}>Logout</button>
                             </div>
@@ -3050,6 +3342,11 @@ export default function App() {
                                         <h2>Trades</h2>
                                         <p className="subtitle">
                                             {trades.length} total | {filteredTrades.length} shown
+                                            {" \u2022 "}
+                                            Balance:{" "}
+                                            {periodBalanceRange?.start != null && periodBalanceRange?.end != null
+                                                ? `${formatMoneyValue(periodBalanceRange.start, accountSettings?.currency)} \u2192 ${formatMoneyValue(periodBalanceRange.end, accountSettings?.currency)}`
+                                                : "\u2014"}
                                         </p>
                                     </div>
                                     <div className="table-header-actions">
@@ -3070,7 +3367,7 @@ export default function App() {
                                         {showFilters && datePreset === "custom" && (
                                             <div className="filter-range">
                                                 <label className="filter-field">
-                                                    <span>Created: From</span>
+                                                    <span>Closed: From</span>
                                                     <input
                                                         className="input filter-input"
                                                         type="date"
@@ -3079,34 +3376,12 @@ export default function App() {
                                                     />
                                                 </label>
                                                 <label className="filter-field">
-                                                    <span>Created: To</span>
+                                                    <span>Closed: To</span>
                                                     <input
                                                         className="input filter-input"
                                                         type="date"
                                                         value={toDate}
                                                         onChange={(e) => setToDate(e.target.value)}
-                                                    />
-                                                </label>
-                                            </div>
-                                        )}
-                                        {showFilters && closedDatePreset === "custom" && (
-                                            <div className="filter-range">
-                                                <label className="filter-field">
-                                                    <span>Closed: From</span>
-                                                    <input
-                                                        className="input filter-input"
-                                                        type="date"
-                                                        value={closedFromDate}
-                                                        onChange={(e) => setClosedFromDate(e.target.value)}
-                                                    />
-                                                </label>
-                                                <label className="filter-field">
-                                                    <span>Closed: To</span>
-                                                    <input
-                                                        className="input filter-input"
-                                                        type="date"
-                                                        value={closedToDate}
-                                                        onChange={(e) => setClosedToDate(e.target.value)}
                                                     />
                                                 </label>
                                             </div>
@@ -3143,8 +3418,46 @@ export default function App() {
                                         </span>
                                     </div>
                                     <div className="summary-stat">
-                                        <span className="summary-label">Trades</span>
-                                        <span className="summary-value">{summaryStats.tradeCount}</span>
+                                        <span className="summary-label">P/L</span>
+                                        <span
+                                            className={`summary-value${
+                                                moneyMetrics?.tradeCount
+                                                    ? moneyMetrics.totalPnl > 0
+                                                        ? " is-positive"
+                                                        : moneyMetrics.totalPnl < 0
+                                                            ? " is-negative"
+                                                            : ""
+                                                    : " is-muted"
+                                            }`}
+                                        >
+                                            {moneyMetrics?.tradeCount
+                                                ? formatMoneyValue(moneyMetrics.totalPnl, accountSettings?.currency)
+                                                : emDash}
+                                        </span>
+                                    </div>
+                                    <div className="summary-stat">
+                                        <span className="summary-label">Return %</span>
+                                        <span className={`summary-value${moneyMetrics?.tradeCount ? "" : " is-muted"}`}>
+                                            {moneyMetrics?.tradeCount
+                                                ? formatPercentValue(moneyMetrics.returnPct)
+                                                : emDash}
+                                        </span>
+                                    </div>
+                                    <div className="summary-stat" title="Largest peak-to-trough decline in realized equity (closed trades).">
+                                        <span className="summary-label">Max DD %</span>
+                                        <span className={`summary-value${moneyMetrics?.tradeCount ? " is-negative" : " is-muted"}`}>
+                                            {moneyMetrics?.tradeCount
+                                                ? formatPercentValue(moneyMetrics.maxDrawdownPct)
+                                                : emDash}
+                                        </span>
+                                    </div>
+                                    <div className="summary-stat" title="Worst cumulative run of consecutive losing trades (in R).">
+                                        <span className="summary-label">L-STREAK (R)</span>
+                                        <span className={`summary-value${moneyMetrics?.tradeCount ? " is-negative" : " is-muted"}`}>
+                                            {moneyMetrics?.tradeCount
+                                                ? formatRValue(moneyMetrics.lossStreakR)
+                                                : emDash}
+                                        </span>
                                     </div>
                                     <div className="summary-stat">
                                         <span className="summary-label">Win %</span>
@@ -3221,7 +3534,7 @@ export default function App() {
                                         <th className="num">Exit</th>
                                         <th className="num">Outcome</th>
                                         <th>Created</th>
-                                        <th>Closed</th>
+                                        <th>Closed date</th>
                                     </tr>
                                     {showFilters && (
                                         <tr className="filter-row">
@@ -3267,26 +3580,12 @@ export default function App() {
                                             <th />
                                             <th />
                                             <th />
+                                            <th />
                                             <th>
                                                 <select
                                                     className="input filter-input"
                                                     value={datePreset}
                                                     onChange={(e) => setDatePreset(e.target.value)}
-                                                    aria-label="Filter by created date"
-                                                >
-                                                    <option value="all">All</option>
-                                                    <option value="today">Today</option>
-                                                    <option value="week">This week</option>
-                                                    <option value="month">This month</option>
-                                                    <option value="year">This year</option>
-                                                    <option value="custom">Custom range</option>
-                                                </select>
-                                            </th>
-                                            <th>
-                                                <select
-                                                    className="input filter-input"
-                                                    value={closedDatePreset}
-                                                    onChange={(e) => setClosedDatePreset(e.target.value)}
                                                     aria-label="Filter by closed date"
                                                 >
                                                     <option value="all">All</option>
@@ -3423,6 +3722,8 @@ export default function App() {
                                 editManualDescription={editManualDescription}
                                 setEditManualDescription={setEditManualDescription}
                                 errorMessage={error}
+                                moneySummary={selectedTradeMoney}
+                                moneyCurrency={accountSettings?.currency}
                                 panelRef={leftPanelRef}
                                 otherPanelRef={rightPanelRef}
                                 isAttachModalOpen={isAttachModalOpen}
@@ -3694,6 +3995,98 @@ export default function App() {
                                                     </span>
                                                 </span>
                                             </div>
+                                        </div>
+                                    </div>
+                                </>
+                            )}
+                            {isAccountSettingsOpen && (
+                                <>
+                                    <div className="modal-backdrop" onClick={closeAccountSettingsModal} />
+                                    <div
+                                        className="modal"
+                                        role="dialog"
+                                        aria-modal="true"
+                                        aria-labelledby="account-settings-title"
+                                        onClick={(e) => e.stopPropagation()}
+                                        onMouseDown={(e) => e.stopPropagation()}
+                                    >
+                                        <div className="modal-header">
+                                            <div>
+                                                <h3 className="modal-title" id="account-settings-title">Account Settings</h3>
+                                                <p className="modal-text">Set your starting balance and default risk per trade.</p>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                className="btn btn-ghost btn-sm modal-close"
+                                                aria-label="Close account settings"
+                                                onClick={closeAccountSettingsModal}
+                                            >
+                                                {"\u00d7"}
+                                            </button>
+                                        </div>
+                                        {accountSettingsError && (
+                                            <div className="banner error">
+                                                {accountSettingsError}
+                                            </div>
+                                        )}
+                                        <div className="risk-calc-grid">
+                                            <label className="field">
+                                                <span>Starting balance</span>
+                                                <input
+                                                    className="input"
+                                                    value={accountSettingsBalance}
+                                                    onChange={(e) => setAccountSettingsBalance(e.target.value)}
+                                                    placeholder="0.00"
+                                                    type="number"
+                                                    min="0"
+                                                    step="0.01"
+                                                />
+                                            </label>
+                                            <label className="field">
+                                                <span>Risk % per trade</span>
+                                                <input
+                                                    className="input"
+                                                    value={accountSettingsRiskPercent}
+                                                    onChange={(e) => setAccountSettingsRiskPercent(e.target.value)}
+                                                    placeholder="1.0"
+                                                    type="number"
+                                                    min="0"
+                                                    step="0.01"
+                                                />
+                                            </label>
+                                            <label className="field">
+                                                <span>Currency (optional)</span>
+                                                <select
+                                                    className="input"
+                                                    value={accountSettingsCurrency}
+                                                    onChange={(e) => setAccountSettingsCurrency(e.target.value)}
+                                                >
+                                                    <option value="">—</option>
+                                                    {ACCOUNT_CURRENCIES.map((currency) => (
+                                                        <option key={currency} value={currency}>
+                                                            {currency}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            </label>
+                                        </div>
+                                        <div className="modal-actions">
+                                            <button
+                                                type="button"
+                                                className="btn btn-ghost"
+                                                onClick={closeAccountSettingsModal}
+                                                disabled={isAccountSettingsSaving}
+                                            >
+                                                Cancel
+                                            </button>
+                                            <button
+                                                type="button"
+                                                className="btn btn-primary"
+                                                onClick={saveAccountSettings}
+                                                disabled={isAccountSettingsSaving}
+                                            >
+                                                {isAccountSettingsSaving ? "Saving..." : "Save"}
+                                            </button>
                                         </div>
                                     </div>
                                 </>
