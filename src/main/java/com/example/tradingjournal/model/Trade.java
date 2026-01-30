@@ -41,6 +41,12 @@ public class Trade {
     private BigDecimal stopLossPrice;
     @Column(name = "take_profit_price", precision = 18, scale = 8)
     private BigDecimal takeProfitPrice;
+    @Column(name = "commission_money", precision = 18, scale = 2)
+    private BigDecimal commissionMoney;
+    @Column(name = "swap_money", precision = 18, scale = 2)
+    private BigDecimal swapMoney;
+    @Column(name = "net_pnl_money", precision = 18, scale = 2)
+    private BigDecimal netPnlMoney;
     private BigDecimal slPips;
     private BigDecimal tpPips;
     private BigDecimal rrRatio;
@@ -202,6 +208,30 @@ public class Trade {
 
     public void setTakeProfitPrice(BigDecimal takeProfitPrice) {
         this.takeProfitPrice = takeProfitPrice;
+    }
+
+    public BigDecimal getCommissionMoney() {
+        return commissionMoney;
+    }
+
+    public void setCommissionMoney(BigDecimal commissionMoney) {
+        this.commissionMoney = commissionMoney;
+    }
+
+    public BigDecimal getSwapMoney() {
+        return swapMoney;
+    }
+
+    public void setSwapMoney(BigDecimal swapMoney) {
+        this.swapMoney = swapMoney;
+    }
+
+    public BigDecimal getNetPnlMoney() {
+        return netPnlMoney;
+    }
+
+    public void setNetPnlMoney(BigDecimal netPnlMoney) {
+        this.netPnlMoney = netPnlMoney;
     }
 
     public BigDecimal getSlPips() {

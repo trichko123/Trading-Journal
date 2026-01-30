@@ -34,6 +34,9 @@ public class TradeController {
             @Size(max = 500) String manualDescription,
             @Positive BigDecimal stopLossPrice,
             @Positive BigDecimal takeProfitPrice,
+            BigDecimal commissionMoney,
+            BigDecimal swapMoney,
+            BigDecimal netPnlMoney,
             Instant createdAt,
             Instant closedAt
     ) {}
@@ -53,6 +56,9 @@ public class TradeController {
             Instant reviewUpdatedAt,
             BigDecimal stopLossPrice,
             BigDecimal takeProfitPrice,
+            BigDecimal commissionMoney,
+            BigDecimal swapMoney,
+            BigDecimal netPnlMoney,
             BigDecimal slPips,
             BigDecimal tpPips,
             BigDecimal rrRatio,
@@ -76,6 +82,9 @@ public class TradeController {
                     t.getReviewUpdatedAt(),
                     t.getStopLossPrice(),
                     t.getTakeProfitPrice(),
+                    t.getCommissionMoney(),
+                    t.getSwapMoney(),
+                    t.getNetPnlMoney(),
                     t.getSlPips(),
                     t.getTpPips(),
                     t.getRrRatio(),
@@ -110,6 +119,9 @@ public TradeResponse create(@Valid @RequestBody CreateTradeRequest req) {
                     req.manualDescription(),
                     req.stopLossPrice(),
                     req.takeProfitPrice(),
+                    req.commissionMoney(),
+                    req.swapMoney(),
+                    req.netPnlMoney(),
                     req.closedAt() // usually null on create
             )
     );
@@ -129,6 +141,9 @@ public TradeResponse update(@PathVariable Long id, @Valid @RequestBody CreateTra
                     req.manualDescription(),
                     req.stopLossPrice(),
                     req.takeProfitPrice(),
+                    req.commissionMoney(),
+                    req.swapMoney(),
+                    req.netPnlMoney(),
                     req.closedAt(),
                     req.createdAt()
             )
