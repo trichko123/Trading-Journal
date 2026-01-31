@@ -28,6 +28,10 @@ const TIMEFRAME_OPTIONS = [
     { value: "1M", label: "1M" },
 ];
 const ACCOUNT_CURRENCIES = ["USD", "EUR", "GBP", "CHF", "JPY"];
+const CASHFLOW_TYPES = [
+    { value: "DEPOSIT", label: "Deposit" },
+    { value: "WITHDRAWAL", label: "Withdrawal" },
+];
 const DEFAULT_PRICE_DECIMALS = 5;
 
 function getPriceDecimals(symbol) {
@@ -1731,6 +1735,23 @@ export default function App() {
     const [accountSettingsError, setAccountSettingsError] = useState("");
     const [isAccountSettingsSaving, setIsAccountSettingsSaving] = useState(false);
     const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
+    const [cashflows, setCashflows] = useState([]);
+    const [isCashflowsOpen, setIsCashflowsOpen] = useState(false);
+    const [cashflowType, setCashflowType] = useState("DEPOSIT");
+    const [cashflowAmount, setCashflowAmount] = useState("");
+    const [cashflowOccurredAt, setCashflowOccurredAt] = useState("");
+    const [cashflowNote, setCashflowNote] = useState("");
+    const [cashflowError, setCashflowError] = useState("");
+    const [isCashflowSaving, setIsCashflowSaving] = useState(false);
+    const [cashflowEditId, setCashflowEditId] = useState(null);
+    const [cashflowEditType, setCashflowEditType] = useState("DEPOSIT");
+    const [cashflowEditAmount, setCashflowEditAmount] = useState("");
+    const [cashflowEditOccurredAt, setCashflowEditOccurredAt] = useState("");
+    const [cashflowEditNote, setCashflowEditNote] = useState("");
+    const [cashflowEditError, setCashflowEditError] = useState("");
+    const [isCashflowEditOpen, setIsCashflowEditOpen] = useState(false);
+    const [cashflowDeleteTarget, setCashflowDeleteTarget] = useState(null);
+    const [isCashflowDeleteOpen, setIsCashflowDeleteOpen] = useState(false);
 
     const [trades, setTrades] = useState([]);
     const [statsMode, setStatsMode] = useState("strategy");
@@ -1889,6 +1910,21 @@ export default function App() {
         if (!Number.isFinite(rValue)) return emDash;
         const sign = rValue > 0 ? "+" : "";
         return `${sign}${rValue.toFixed(2)}R`;
+    }
+
+    function formatCashflowTypeLabel(value) {
+        if (!value) return "Deposit";
+        const normalized = String(value).toUpperCase();
+        return normalized === "WITHDRAWAL" ? "Withdrawal" : "Deposit";
+    }
+
+    function formatCashflowAmount(cashflow) {
+        if (!cashflow) return "\u2014";
+        const amountNumber = Number(cashflow.amountMoney);
+        if (!Number.isFinite(amountNumber)) return "\u2014";
+        const isWithdrawal = String(cashflow.type || "").toUpperCase() === "WITHDRAWAL";
+        const signedAmount = isWithdrawal ? -Math.abs(amountNumber) : Math.abs(amountNumber);
+        return formatMoneyValue(signedAmount, accountSettings?.currency);
     }
 
     function getOutcomeClass(trade) {
@@ -2153,6 +2189,10 @@ export default function App() {
         localStorage.removeItem("token");
         setTrades([]);
         setAccountSettings(null);
+        setCashflows([]);
+        setIsCashflowsOpen(false);
+        setIsCashflowEditOpen(false);
+        setIsCashflowDeleteOpen(false);
     }
 
     useEffect(() => {
@@ -2259,6 +2299,24 @@ export default function App() {
             setAccountSettings(data);
         } catch (err) {
             setAccountSettingsError(String(err));
+        }
+    }
+
+    async function loadCashflows() {
+        if (!token) return;
+        setCashflowError("");
+        try {
+            const res = await fetch(`${API}/cashflows`, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            if (!res.ok) {
+                const txt = await res.text();
+                throw new Error(`Load cashflows failed (${res.status}): ${txt}`);
+            }
+            const data = await res.json();
+            setCashflows(Array.isArray(data) ? data : []);
+        } catch (err) {
+            setCashflowError(String(err).replace(/^Error:\s*/, ""));
         }
     }
 
@@ -2412,6 +2470,157 @@ export default function App() {
         } finally {
             setIsAccountSettingsSaving(false);
         }
+    }
+
+    function openCashflowsModal() {
+        setCashflowError("");
+        setCashflowType("DEPOSIT");
+        setCashflowAmount("");
+        setCashflowOccurredAt(toDateTimeLocalValue(new Date()));
+        setCashflowNote("");
+        setIsCashflowsOpen(true);
+        loadCashflows();
+    }
+
+    function closeCashflowsModal() {
+        setIsCashflowsOpen(false);
+        setCashflowError("");
+    }
+
+    function openCashflowEditModal(cashflow) {
+        if (!cashflow) return;
+        setCashflowEditId(cashflow.id);
+        setCashflowEditType(cashflow.type ?? "DEPOSIT");
+        setCashflowEditAmount(cashflow.amountMoney != null ? String(cashflow.amountMoney) : "");
+        setCashflowEditOccurredAt(toDateTimeLocalValue(cashflow.occurredAt));
+        setCashflowEditNote(cashflow.note ?? "");
+        setCashflowEditError("");
+        setIsCashflowEditOpen(true);
+    }
+
+    function closeCashflowEditModal() {
+        setIsCashflowEditOpen(false);
+        setCashflowEditId(null);
+        setCashflowEditError("");
+    }
+
+    async function createCashflow() {
+        if (isCashflowSaving) return;
+        setCashflowError("");
+        const amountNumber = Number(cashflowAmount);
+        if (!Number.isFinite(amountNumber) || amountNumber <= 0) {
+            setCashflowError("Amount must be a positive number.");
+            return;
+        }
+        if (!cashflowType) {
+            setCashflowError("Type is required.");
+            return;
+        }
+        const occurredAtIso = toIsoFromLocal(cashflowOccurredAt);
+        if (!occurredAtIso) {
+            setCashflowError("Date/time is required.");
+            return;
+        }
+        setIsCashflowSaving(true);
+        try {
+            const res = await fetch(`${API}/cashflows`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify({
+                    type: cashflowType,
+                    amountMoney: amountNumber,
+                    occurredAt: occurredAtIso,
+                    note: cashflowNote?.trim() ? cashflowNote.trim() : null,
+                }),
+            });
+            if (!res.ok) {
+                const txt = await res.text();
+                throw new Error(`Create cashflow failed (${res.status}): ${txt}`);
+            }
+            setCashflowAmount("");
+            setCashflowNote("");
+            setCashflowOccurredAt(toDateTimeLocalValue(new Date()));
+            await loadCashflows();
+        } catch (err) {
+            setCashflowError(String(err).replace(/^Error:\s*/, ""));
+        } finally {
+            setIsCashflowSaving(false);
+        }
+    }
+
+    async function saveCashflowEdit() {
+        if (!cashflowEditId) return;
+        setCashflowEditError("");
+        const amountNumber = Number(cashflowEditAmount);
+        if (!Number.isFinite(amountNumber) || amountNumber <= 0) {
+            setCashflowEditError("Amount must be a positive number.");
+            return;
+        }
+        if (!cashflowEditType) {
+            setCashflowEditError("Type is required.");
+            return;
+        }
+        const occurredAtIso = toIsoFromLocal(cashflowEditOccurredAt);
+        if (!occurredAtIso) {
+            setCashflowEditError("Date/time is required.");
+            return;
+        }
+        try {
+            const res = await fetch(`${API}/cashflows/${cashflowEditId}`, {
+                method: "PUT",
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify({
+                    type: cashflowEditType,
+                    amountMoney: amountNumber,
+                    occurredAt: occurredAtIso,
+                    note: cashflowEditNote?.trim() ? cashflowEditNote.trim() : null,
+                }),
+            });
+            if (!res.ok) {
+                const txt = await res.text();
+                throw new Error(`Update cashflow failed (${res.status}): ${txt}`);
+            }
+            closeCashflowEditModal();
+            await loadCashflows();
+        } catch (err) {
+            setCashflowEditError(String(err).replace(/^Error:\s*/, ""));
+        }
+    }
+
+    async function deleteCashflow(id) {
+        if (!id) return;
+        try {
+            const res = await fetch(`${API}/cashflows/${id}`, {
+                method: "DELETE",
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            if (!res.ok) {
+                const txt = await res.text();
+                throw new Error(`Delete cashflow failed (${res.status}): ${txt}`);
+            }
+            await loadCashflows();
+        } catch (err) {
+            setCashflowError(String(err).replace(/^Error:\s*/, ""));
+        }
+    }
+
+    function requestDeleteCashflow(cashflow) {
+        if (!cashflow) return;
+        setCashflowDeleteTarget(cashflow);
+        setIsCashflowDeleteOpen(true);
+    }
+
+    async function confirmDeleteCashflow() {
+        if (!cashflowDeleteTarget) return;
+        await deleteCashflow(cashflowDeleteTarget.id);
+        setIsCashflowDeleteOpen(false);
+        setCashflowDeleteTarget(null);
     }
 
     function handleAttachmentFile(file) {
@@ -3064,6 +3273,43 @@ export default function App() {
         return true;
     }
 
+    const ledgerEvents = useMemo(() => {
+        const events = [];
+        cashflows.forEach((cashflow) => {
+            if (!cashflow?.occurredAt) return;
+            const ts = parseCreatedAt(cashflow.occurredAt);
+            if (!ts) return;
+            const amount = Number(cashflow.amountMoney);
+            if (!Number.isFinite(amount)) return;
+            events.push({
+                kind: "cashflow",
+                ts: ts.getTime(),
+                id: cashflow.id ?? 0,
+                type: cashflow.type,
+                amount,
+            });
+        });
+        trades.forEach((trade) => {
+            if (!trade?.closedAt) return;
+            const rValue = computeStrategyOutcomeR(trade);
+            if (!Number.isFinite(rValue)) return;
+            const ts = parseCreatedAt(trade.closedAt);
+            if (!ts) return;
+            events.push({
+                kind: "trade",
+                ts: ts.getTime(),
+                id: trade.id ?? 0,
+                trade,
+                rValue,
+            });
+        });
+        return events.sort((a, b) => {
+            if (a.ts !== b.ts) return a.ts - b.ts;
+            if (a.kind !== b.kind) return a.kind === "cashflow" ? -1 : 1;
+            return (a.id ?? 0) - (b.id ?? 0);
+        });
+    }, [cashflows, trades]);
+
     const strategyLedger = useMemo(() => {
         if (!accountSettings) return null;
         const startingBalance = Number(accountSettings.startingBalance);
@@ -3071,23 +3317,22 @@ export default function App() {
         if (!Number.isFinite(startingBalance) || startingBalance <= 0) return null;
         if (!Number.isFinite(riskPercent) || riskPercent <= 0) return null;
         const riskFraction = riskPercent / 100;
-        const closedTrades = trades
-            .filter((trade) => trade?.closedAt && Number.isFinite(computeStrategyOutcomeR(trade)))
-            .slice()
-            .sort((a, b) => {
-                const aTime = new Date(a.closedAt).getTime();
-                const bTime = new Date(b.closedAt).getTime();
-                if (aTime !== bTime) return aTime - bTime;
-                return (a.id ?? 0) - (b.id ?? 0);
-            });
         const byTrade = new Map();
+        const orderedTrades = [];
         let balance = startingBalance;
         let lastBalanceAfter = null;
-        closedTrades.forEach((trade) => {
-            const rValue = computeStrategyOutcomeR(trade);
-            if (!Number.isFinite(rValue)) return;
+        ledgerEvents.forEach((event) => {
+            if (event.kind === "cashflow") {
+                const normalized = String(event.type || "").toUpperCase();
+                const amount = Math.abs(event.amount);
+                if (!Number.isFinite(amount)) return;
+                balance = normalized === "WITHDRAWAL" ? balance - amount : balance + amount;
+                return;
+            }
+            const trade = event.trade;
+            const rValue = event.rValue;
             const balanceBefore = balance;
-            const riskAmount = balanceBefore * riskFraction;
+            const riskAmount = balanceBefore > 0 ? balanceBefore * riskFraction : 0;
             const pnlMoney = rValue * riskAmount;
             const balanceAfter = balanceBefore + pnlMoney;
             byTrade.set(trade.id, {
@@ -3098,41 +3343,7 @@ export default function App() {
             });
             balance = balanceAfter;
             lastBalanceAfter = balanceAfter;
-        });
-        return {
-            startingBalance,
-            endingBalance: balance,
-            lastBalanceAfter,
-            hasClosedTrades: closedTrades.length > 0,
-            byTrade,
-            orderedTrades: closedTrades,
-            riskFraction,
-        };
-    }, [accountSettings, trades]);
-
-    const realizedLedger = useMemo(() => {
-        if (!strategyLedger?.byTrade) return null;
-        const { startingBalance, orderedTrades, riskFraction, byTrade: strategyByTrade } = strategyLedger;
-        let balance = startingBalance;
-        let lastBalanceAfter = null;
-        const byTrade = new Map();
-        orderedTrades.forEach((trade) => {
-            const strategyEntry = strategyByTrade.get(trade.id);
-            if (!strategyEntry) return;
-            const balanceBefore = balance;
-            const riskAmount = balanceBefore * riskFraction;
-            const hasNetPnl = isNetPnlPresent(trade);
-            const pnlMoney = hasNetPnl ? Number(trade.netPnlMoney) : strategyEntry.pnlMoney;
-            const balanceAfter = balanceBefore + pnlMoney;
-            byTrade.set(trade.id, {
-                balanceBefore,
-                riskAmount,
-                pnlMoney,
-                balanceAfter,
-                isRealizedCovered: hasNetPnl,
-            });
-            balance = balanceAfter;
-            lastBalanceAfter = balanceAfter;
+            orderedTrades.push(trade);
         });
         return {
             startingBalance,
@@ -3143,7 +3354,55 @@ export default function App() {
             orderedTrades,
             riskFraction,
         };
-    }, [strategyLedger]);
+    }, [accountSettings, ledgerEvents]);
+
+    const realizedLedger = useMemo(() => {
+        if (!accountSettings) return null;
+        const startingBalance = Number(accountSettings.startingBalance);
+        const riskPercent = Number(accountSettings.riskPercent);
+        if (!Number.isFinite(startingBalance) || startingBalance <= 0) return null;
+        if (!Number.isFinite(riskPercent) || riskPercent <= 0) return null;
+        const riskFraction = riskPercent / 100;
+        const byTrade = new Map();
+        const orderedTrades = [];
+        let balance = startingBalance;
+        let lastBalanceAfter = null;
+        ledgerEvents.forEach((event) => {
+            if (event.kind === "cashflow") {
+                const normalized = String(event.type || "").toUpperCase();
+                const amount = Math.abs(event.amount);
+                if (!Number.isFinite(amount)) return;
+                balance = normalized === "WITHDRAWAL" ? balance - amount : balance + amount;
+                return;
+            }
+            const trade = event.trade;
+            const rValue = event.rValue;
+            const balanceBefore = balance;
+            const riskAmount = balanceBefore > 0 ? balanceBefore * riskFraction : 0;
+            const hasNetPnl = isNetPnlPresent(trade);
+            const pnlMoney = hasNetPnl ? Number(trade.netPnlMoney) : rValue * riskAmount;
+            const balanceAfter = balanceBefore + pnlMoney;
+            byTrade.set(trade.id, {
+                balanceBefore,
+                riskAmount,
+                pnlMoney,
+                balanceAfter,
+                isRealizedCovered: hasNetPnl,
+            });
+            balance = balanceAfter;
+            lastBalanceAfter = balanceAfter;
+            orderedTrades.push(trade);
+        });
+        return {
+            startingBalance,
+            endingBalance: balance,
+            lastBalanceAfter,
+            hasClosedTrades: orderedTrades.length > 0,
+            byTrade,
+            orderedTrades,
+            riskFraction,
+        };
+    }, [accountSettings, ledgerEvents]);
 
     const activeLedger = statsMode === "realized" ? realizedLedger : strategyLedger;
 
@@ -3307,13 +3566,28 @@ export default function App() {
         };
     }, [filteredTrades, activeLedger, statsMode, realizedLedger]);
 
+    const cashflowNet = useMemo(() => {
+        if (!cashflows.length) return 0;
+        const isAllTime = datePreset === "all" && !fromDate && !toDate;
+        return cashflows.reduce((sum, cashflow) => {
+            if (!cashflow) return sum;
+            if (!isAllTime && !matchesDatePreset(cashflow.occurredAt, datePreset, fromDate, toDate)) {
+                return sum;
+            }
+            const amount = Number(cashflow.amountMoney);
+            if (!Number.isFinite(amount)) return sum;
+            const normalizedType = String(cashflow.type || "").toUpperCase();
+            return normalizedType === "WITHDRAWAL" ? sum - amount : sum + amount;
+        }, 0);
+    }, [cashflows, datePreset, fromDate, toDate]);
+
     const periodBalanceRange = useMemo(() => {
         if (!activeLedger?.byTrade) return null;
         const isAllTime = datePreset === "all" && !fromDate && !toDate;
         if (isAllTime) {
             return {
                 start: activeLedger.startingBalance,
-                end: activeLedger.hasClosedTrades ? activeLedger.lastBalanceAfter : activeLedger.startingBalance,
+                end: activeLedger.endingBalance,
             };
         }
         const periodTrades = filteredTrades
@@ -3424,6 +3698,7 @@ export default function App() {
         if (token) {
             loadTrades({ force: true });
             loadAccountSettings();
+            loadCashflows();
         }
     }, [token]);
 
@@ -3482,6 +3757,40 @@ export default function App() {
         window.addEventListener("keydown", handleKeydown);
         return () => window.removeEventListener("keydown", handleKeydown);
     }, [isAccountSettingsOpen]);
+
+    useEffect(() => {
+        if (!isCashflowsOpen) return undefined;
+        const handleKeydown = (event) => {
+            if (event.key === "Escape") {
+                closeCashflowsModal();
+            }
+        };
+        window.addEventListener("keydown", handleKeydown);
+        return () => window.removeEventListener("keydown", handleKeydown);
+    }, [isCashflowsOpen]);
+
+    useEffect(() => {
+        if (!isCashflowEditOpen) return undefined;
+        const handleKeydown = (event) => {
+            if (event.key === "Escape") {
+                closeCashflowEditModal();
+            }
+        };
+        window.addEventListener("keydown", handleKeydown);
+        return () => window.removeEventListener("keydown", handleKeydown);
+    }, [isCashflowEditOpen]);
+
+    useEffect(() => {
+        if (!isCashflowDeleteOpen) return undefined;
+        const handleKeydown = (event) => {
+            if (event.key === "Escape") {
+                setIsCashflowDeleteOpen(false);
+                setCashflowDeleteTarget(null);
+            }
+        };
+        window.addEventListener("keydown", handleKeydown);
+        return () => window.removeEventListener("keydown", handleKeydown);
+    }, [isCashflowDeleteOpen]);
 
     useEffect(() => {
         if (!isAccountMenuOpen) return undefined;
@@ -3631,13 +3940,8 @@ export default function App() {
                                     {statsMode === "realized" ? "Balance (Broker)" : "Balance (Plan)"}
                                 </span>
                                 <span className="user-email">
-                                    {activeLedger?.byTrade
-                                        ? formatMoneyValue(
-                                            activeLedger.hasClosedTrades
-                                                ? activeLedger.lastBalanceAfter
-                                                : activeLedger.startingBalance,
-                                            accountSettings?.currency
-                                        )
+                                    {activeLedger
+                                        ? formatMoneyValue(activeLedger.endingBalance, accountSettings?.currency)
                                         : "\u2014"}
                                 </span>
                             </div>
@@ -3672,6 +3976,16 @@ export default function App() {
                                                 }}
                                             >
                                                 Account Settings
+                                            </button>
+                                            <button
+                                                className="account-item"
+                                                type="button"
+                                                onClick={() => {
+                                                    setIsAccountMenuOpen(false);
+                                                    openCashflowsModal();
+                                                }}
+                                            >
+                                                Cashflows
                                             </button>
                                             <div className="account-divider" />
                                             <button
@@ -3893,6 +4207,14 @@ export default function App() {
                                                     ? `${formatMoneyValue(periodBalanceRange.start, accountSettings?.currency)} \u2192 ${formatMoneyValue(periodBalanceRange.end, accountSettings?.currency)}`
                                                     : "\u2014"}
                                             </div>
+                                            {cashflows.length > 0 && Math.abs(cashflowNet) > 1e-9 && (
+                                                <div
+                                                    className={`cashflow-pill${cashflowNet >= 0 ? " is-positive" : " is-negative"}`}
+                                                    title="Balance includes deposits/withdrawals. P/L shows trading results only."
+                                                >
+                                                    Cashflow: {formatMoneyValue(cashflowNet, accountSettings?.currency)}
+                                                </div>
+                                            )}
                                         </div>
                                         <div className="trades-header-row trades-header-row--mode">
                                             <div className="summary-toggle" role="group" aria-label="Stats mode">
@@ -4589,6 +4911,292 @@ export default function App() {
                                                     </span>
                                                 </span>
                                             </div>
+                                        </div>
+                                    </div>
+                                </>
+                            )}
+                            {isCashflowsOpen && (
+                                <>
+                                    <div className="modal-backdrop" onClick={closeCashflowsModal} />
+                                    <div
+                                        className="modal cashflow-modal"
+                                        role="dialog"
+                                        aria-modal="true"
+                                        aria-labelledby="cashflows-title"
+                                        onClick={(e) => e.stopPropagation()}
+                                        onMouseDown={(e) => e.stopPropagation()}
+                                    >
+                                        <div className="modal-header">
+                                            <div>
+                                                <h3 className="modal-title" id="cashflows-title">Cashflows</h3>
+                                                <p className="modal-text">Track deposits and withdrawals on your account.</p>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                className="btn btn-ghost btn-sm modal-close"
+                                                aria-label="Close cashflows"
+                                                onClick={closeCashflowsModal}
+                                            >
+                                                {"\u00d7"}
+                                            </button>
+                                        </div>
+                                        {cashflowError && (
+                                            <div className="banner error">
+                                                {cashflowError}
+                                            </div>
+                                        )}
+                                        <div className="cashflow-form">
+                                            <div className="cashflow-grid">
+                                                <label className="field">
+                                                    <span>Type</span>
+                                                    <select
+                                                        className="input"
+                                                        value={cashflowType}
+                                                        onChange={(e) => setCashflowType(e.target.value)}
+                                                    >
+                                                        {CASHFLOW_TYPES.map((option) => (
+                                                            <option key={option.value} value={option.value}>
+                                                                {option.label}
+                                                            </option>
+                                                        ))}
+                                                    </select>
+                                                </label>
+                                                <label className="field">
+                                                    <span>Amount</span>
+                                                    <input
+                                                        className="input"
+                                                        value={cashflowAmount}
+                                                        onChange={(e) => setCashflowAmount(e.target.value)}
+                                                        placeholder="0.00"
+                                                        type="number"
+                                                        min="0"
+                                                        step="0.01"
+                                                    />
+                                                </label>
+                                                <label className="field">
+                                                    <span>Date/time</span>
+                                                    <input
+                                                        className="input"
+                                                        value={cashflowOccurredAt}
+                                                        onChange={(e) => setCashflowOccurredAt(e.target.value)}
+                                                        type="datetime-local"
+                                                    />
+                                                </label>
+                                                <label className="field cashflow-span-2">
+                                                    <span>Note (optional)</span>
+                                                    <input
+                                                        className="input"
+                                                        value={cashflowNote}
+                                                        onChange={(e) => setCashflowNote(e.target.value)}
+                                                        placeholder="e.g. Top-up, payout"
+                                                        maxLength={500}
+                                                    />
+                                                </label>
+                                            </div>
+                                            <div className="modal-actions">
+                                                <button
+                                                    type="button"
+                                                    className="btn btn-ghost"
+                                                    onClick={closeCashflowsModal}
+                                                    disabled={isCashflowSaving}
+                                                >
+                                                    Cancel
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    className="btn btn-primary"
+                                                    onClick={createCashflow}
+                                                    disabled={isCashflowSaving}
+                                                >
+                                                    {isCashflowSaving ? "Saving..." : "Add"}
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div className="cashflow-section">
+                                            <div className="cashflow-list">
+                                                <div className="cashflow-row cashflow-row--header">
+                                                    <span>Date</span>
+                                                    <span>Type</span>
+                                                    <span>Amount</span>
+                                                    <span>Note</span>
+                                                    <span>Actions</span>
+                                                </div>
+                                                {cashflows.length ? (
+                                                    cashflows.map((cashflow) => {
+                                                        const typeLabel = formatCashflowTypeLabel(cashflow.type);
+                                                        const isWithdrawal = String(cashflow.type || "").toUpperCase() === "WITHDRAWAL";
+                                                        const amountClass = isWithdrawal ? " is-negative" : " is-positive";
+                                                        return (
+                                                            <div className="cashflow-row" key={cashflow.id}>
+                                                                <span>{formatDate(cashflow.occurredAt)}</span>
+                                                                <span>{typeLabel}</span>
+                                                                <span className={`cashflow-amount${amountClass}`}>
+                                                                    {formatCashflowAmount(cashflow)}
+                                                                </span>
+                                                                <span className={`cashflow-note${cashflow.note ? "" : " is-muted"}`}>
+                                                                    {cashflow.note || "\u2014"}
+                                                                </span>
+                                                                <span className="cashflow-actions">
+                                                                    <button
+                                                                        type="button"
+                                                                        className="btn btn-ghost btn-sm"
+                                                                        onClick={() => openCashflowEditModal(cashflow)}
+                                                                    >
+                                                                        Edit
+                                                                    </button>
+                                                                    <button
+                                                                        type="button"
+                                                                        className="btn btn-ghost btn-sm"
+                                                                        onClick={() => requestDeleteCashflow(cashflow)}
+                                                                    >
+                                                                        Delete
+                                                                    </button>
+                                                                </span>
+                                                            </div>
+                                                        );
+                                                    })
+                                                ) : (
+                                                    <div className="cashflow-empty">No cashflows yet.</div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </>
+                            )}
+                            {isCashflowEditOpen && (
+                                <>
+                                    <div className="modal-backdrop" onClick={closeCashflowEditModal} />
+                                    <div
+                                        className="modal cashflow-modal"
+                                        role="dialog"
+                                        aria-modal="true"
+                                        aria-labelledby="cashflow-edit-title"
+                                        onClick={(e) => e.stopPropagation()}
+                                        onMouseDown={(e) => e.stopPropagation()}
+                                    >
+                                        <div className="modal-header">
+                                            <div>
+                                                <h3 className="modal-title" id="cashflow-edit-title">Edit cashflow</h3>
+                                                <p className="modal-text">Update the details for this cashflow.</p>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                className="btn btn-ghost btn-sm modal-close"
+                                                aria-label="Close edit cashflow"
+                                                onClick={closeCashflowEditModal}
+                                            >
+                                                {"\u00d7"}
+                                            </button>
+                                        </div>
+                                        {cashflowEditError && (
+                                            <div className="banner error">
+                                                {cashflowEditError}
+                                            </div>
+                                        )}
+                                        <div className="cashflow-form">
+                                            <div className="cashflow-grid">
+                                                <label className="field">
+                                                    <span>Type</span>
+                                                    <select
+                                                        className="input"
+                                                        value={cashflowEditType}
+                                                        onChange={(e) => setCashflowEditType(e.target.value)}
+                                                    >
+                                                        {CASHFLOW_TYPES.map((option) => (
+                                                            <option key={option.value} value={option.value}>
+                                                                {option.label}
+                                                            </option>
+                                                        ))}
+                                                    </select>
+                                                </label>
+                                                <label className="field">
+                                                    <span>Amount</span>
+                                                    <input
+                                                        className="input"
+                                                        value={cashflowEditAmount}
+                                                        onChange={(e) => setCashflowEditAmount(e.target.value)}
+                                                        placeholder="0.00"
+                                                        type="number"
+                                                        min="0"
+                                                        step="0.01"
+                                                    />
+                                                </label>
+                                                <label className="field">
+                                                    <span>Date/time</span>
+                                                    <input
+                                                        className="input"
+                                                        value={cashflowEditOccurredAt}
+                                                        onChange={(e) => setCashflowEditOccurredAt(e.target.value)}
+                                                        type="datetime-local"
+                                                    />
+                                                </label>
+                                                <label className="field cashflow-span-2">
+                                                    <span>Note (optional)</span>
+                                                    <input
+                                                        className="input"
+                                                        value={cashflowEditNote}
+                                                        onChange={(e) => setCashflowEditNote(e.target.value)}
+                                                        placeholder="e.g. Top-up, payout"
+                                                        maxLength={500}
+                                                    />
+                                                </label>
+                                            </div>
+                                            <div className="modal-actions">
+                                                <button
+                                                    type="button"
+                                                    className="btn btn-ghost"
+                                                    onClick={closeCashflowEditModal}
+                                                >
+                                                    Cancel
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    className="btn btn-primary"
+                                                    onClick={saveCashflowEdit}
+                                                >
+                                                    Save
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </>
+                            )}
+                            {isCashflowDeleteOpen && (
+                                <>
+                                    <div
+                                        className="modal-backdrop"
+                                        onClick={() => {
+                                            setIsCashflowDeleteOpen(false);
+                                            setCashflowDeleteTarget(null);
+                                        }}
+                                    />
+                                    <div
+                                        className="modal"
+                                        role="dialog"
+                                        aria-modal="true"
+                                        aria-labelledby="cashflow-delete-title"
+                                        onClick={(e) => e.stopPropagation()}
+                                    >
+                                        <h3 className="modal-title" id="cashflow-delete-title">Delete cashflow?</h3>
+                                        <p className="modal-text">This action cannot be undone.</p>
+                                        <div className="modal-actions">
+                                            <button
+                                                type="button"
+                                                className="btn btn-ghost"
+                                                onClick={() => {
+                                                    setIsCashflowDeleteOpen(false);
+                                                    setCashflowDeleteTarget(null);
+                                                }}
+                                            >
+                                                Cancel
+                                            </button>
+                                            <button
+                                                type="button"
+                                                className="btn btn-danger"
+                                                onClick={confirmDeleteCashflow}
+                                            >
+                                                Delete
+                                            </button>
                                         </div>
                                     </div>
                                 </>
