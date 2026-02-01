@@ -3,6 +3,27 @@ import { GoogleLogin } from "@react-oauth/google";
 import { exportToCsv } from "./utils/exportCsv";
 import { INSTRUMENTS, getDisplayUnit, getInstrument, getTickSize } from "./constants/instruments";
 import { calculateRiskPosition } from "./utils/riskCalculator";
+import { getPriceStep, formatPriceValue } from "./shared/lib/price";
+import { formatMoneyValue, formatMoneyNullable, formatPercentValue, formatRValue, formatWinPct } from "./shared/lib/format";
+import {
+    parseCreatedAt,
+    formatDate,
+    toIsoString,
+    toDateTimeLocalValue,
+    toIsoFromLocal,
+    matchesDatePreset,
+    formatDuration,
+} from "./shared/lib/datetime";
+import { normalizeEmail, tryExtractEmailFromIdToken } from "./shared/lib/authToken";
+import { formatCalcNumber, formatCalcInteger, formatCalcPrice } from "./features/risk/utils/riskFormat";
+import {
+    computeStrategyOutcomeR,
+    isNetPnlPresent,
+    getRealizedRIfPresent,
+    getOutcomeRForMode,
+    formatOutcome as formatOutcomeUtil,
+    getOutcomeClass as getOutcomeClassUtil,
+} from "./features/stats/utils/outcomes";
 import "./App.css";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080";
@@ -32,27 +53,6 @@ const CASHFLOW_TYPES = [
     { value: "DEPOSIT", label: "Deposit" },
     { value: "WITHDRAWAL", label: "Withdrawal" },
 ];
-const DEFAULT_PRICE_DECIMALS = 5;
-
-function getPriceDecimals(symbol) {
-    if (!symbol) return DEFAULT_PRICE_DECIMALS;
-    const normalized = String(symbol).trim().toUpperCase();
-    if (normalized === "XAUUSD") return 2;
-    if (normalized.endsWith("JPY")) return 3;
-    return DEFAULT_PRICE_DECIMALS;
-}
-
-function getPriceStep(symbol) {
-    const decimals = getPriceDecimals(symbol);
-    return (1 / 10 ** decimals).toFixed(decimals);
-}
-
-function formatPriceValue(value, symbol) {
-    const num = Number(value);
-    if (!Number.isFinite(num)) return null;
-    return num.toFixed(getPriceDecimals(symbol));
-}
-
 const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 
 function DetailRow({ label, value, isMuted = false, isEditing = false }) {
@@ -64,40 +64,6 @@ function DetailRow({ label, value, isMuted = false, isEditing = false }) {
             </span>
         </div>
     );
-}
-
-function formatMoneyValue(value, currencyCode, fallbackSymbol = "$") {
-    if (!Number.isFinite(value)) return "\u2014";
-    const sign = value > 0 ? "+" : value < 0 ? "-" : "";
-    const absValue = Math.abs(value);
-    if (currencyCode) {
-        try {
-            const formatted = new Intl.NumberFormat(undefined, {
-                style: "currency",
-                currency: currencyCode,
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2,
-            }).format(absValue);
-            return `${sign}${formatted}`;
-        } catch {
-            // Fall through to simple formatting
-        }
-    }
-    return `${sign}${fallbackSymbol}${absValue.toFixed(2)}`;
-}
-
-function formatMoneyNullable(value, currencyCode, { forceNegative = false } = {}) {
-    if (value === null || value === undefined) return "\u2014";
-    const num = Number(value);
-    if (!Number.isFinite(num)) return "\u2014";
-    const adjusted = forceNegative ? -Math.abs(num) : num;
-    return formatMoneyValue(adjusted, currencyCode);
-}
-
-function formatPercentValue(value, decimals = 2) {
-    if (!Number.isFinite(value)) return "\u2014";
-    const sign = value > 0 ? "+" : value < 0 ? "-" : "";
-    return `${sign}${Math.abs(value).toFixed(decimals)}%`;
 }
 
 function TradeDetailsPanelLeft({
@@ -1855,63 +1821,6 @@ export default function App() {
         "New York / Asian",
     ];
 
-    function computeStrategyOutcomeR(trade) {
-        if (!trade?.closedAt) return null;
-        if (trade.exitPrice == null) return null;
-        const entry = Number(trade.entryPrice);
-        const exit = Number(trade.exitPrice);
-        if (!Number.isFinite(entry) || !Number.isFinite(exit)) return null;
-        if (Math.abs(entry - exit) < 1e-9) return 0;
-        if (trade.stopLossPrice == null) return null;
-        const stopLoss = Number(trade.stopLossPrice);
-        if (!Number.isFinite(stopLoss)) return null;
-
-        const direction = trade.direction?.toUpperCase();
-        const risk = direction === "SHORT" ? (stopLoss - entry) : (entry - stopLoss);
-        if (!Number.isFinite(risk) || risk <= 0) return null;
-
-        const reward = direction === "SHORT" ? (entry - exit) : (exit - entry);
-        const rValue = reward / risk;
-        if (!Number.isFinite(rValue)) return null;
-        return rValue;
-    }
-
-    const isNetPnlPresent = (trade) => {
-        if (!trade) return false;
-        if (trade.netPnlMoney === null || trade.netPnlMoney === undefined) return false;
-        return Number.isFinite(Number(trade.netPnlMoney));
-    };
-
-    const getRealizedRIfPresent = (trade) => {
-        if (!isNetPnlPresent(trade)) return null;
-        const entry = realizedLedger?.byTrade?.get(trade.id);
-        if (!entry || !Number.isFinite(entry.riskAmount) || entry.riskAmount === 0) return null;
-        return Number(trade.netPnlMoney) / entry.riskAmount;
-    };
-
-    const getOutcomeRForMode = (trade) => {
-        const strategyR = computeStrategyOutcomeR(trade);
-        if (!Number.isFinite(strategyR)) return null;
-        if (statsMode !== "realized") return strategyR;
-        const realizedEntry = realizedLedger?.byTrade?.get(trade.id);
-        if (!realizedEntry || !Number.isFinite(realizedEntry.riskAmount) || realizedEntry.riskAmount === 0) {
-            return strategyR;
-        }
-        if (isNetPnlPresent(trade)) {
-            const netPnl = Number(trade.netPnlMoney);
-            return netPnl / realizedEntry.riskAmount;
-        }
-        return strategyR;
-    };
-
-    function formatOutcome(trade) {
-        const emDash = "\u2014";
-        const rValue = getOutcomeRForMode(trade);
-        if (!Number.isFinite(rValue)) return emDash;
-        const sign = rValue > 0 ? "+" : "";
-        return `${sign}${rValue.toFixed(2)}R`;
-    }
-
     function formatCashflowTypeLabel(value) {
         if (!value) return "Deposit";
         const normalized = String(value).toUpperCase();
@@ -1927,33 +1836,15 @@ export default function App() {
         return formatMoneyValue(signedAmount, accountSettings?.currency);
     }
 
-    function getOutcomeClass(trade) {
-        const rValue = getOutcomeRForMode(trade);
-        if (!Number.isFinite(rValue)) return "outcome outcome--na";
-        if (Math.abs(rValue) < 1e-9) return "outcome outcome--flat";
-        return rValue > 0 ? "outcome outcome--win" : "outcome outcome--loss";
-    }
+    const formatOutcome = (trade) => formatOutcomeUtil(trade, {
+        statsMode,
+        realizedLedgerByTrade: realizedLedger?.byTrade,
+    });
 
-    function normalizeEmail(value) {
-        return value.trim().toLowerCase();
-    }
-
-    function base64UrlDecode(value) {
-        const padded = value.replace(/-/g, "+").replace(/_/g, "/").padEnd(value.length + (4 - (value.length % 4)) % 4, "=");
-        return atob(padded);
-    }
-
-    function tryExtractEmailFromIdToken(idToken) {
-        try {
-            const payload = idToken.split(".")[1];
-            if (!payload) return null;
-            const json = base64UrlDecode(payload);
-            const data = JSON.parse(json);
-            return typeof data.email === "string" ? data.email : null;
-        } catch {
-            return null;
-        }
-    }
+    const getOutcomeClass = (trade) => getOutcomeClassUtil(trade, {
+        statsMode,
+        realizedLedgerByTrade: realizedLedger?.byTrade,
+    });
 
     async function handleGoogleSuccess(credentialResponse) {
         setError("");
@@ -2057,40 +1948,6 @@ export default function App() {
         }
     }
 
-    function parseCreatedAt(value) {
-        if (!value) return null;
-        if (value instanceof Date) return value;
-        if (typeof value === "string") {
-            const d = new Date(value);
-            return Number.isNaN(d.getTime()) ? null : d;
-        }
-        return null;
-    }
-
-    function formatDate(value) {
-        const d = parseCreatedAt(value);
-        if (!d) return "-";
-        return d.toLocaleString();
-    }
-
-    function toIsoString(value) {
-        const d = parseCreatedAt(value);
-        return d ? d.toISOString() : "";
-    }
-
-    function toDateTimeLocalValue(value) {
-        const d = parseCreatedAt(value);
-        if (!d) return "";
-        const pad = (n) => String(n).padStart(2, "0");
-        return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-    }
-
-    function toIsoFromLocal(value) {
-        if (!value) return null;
-        const d = new Date(value);
-        return Number.isNaN(d.getTime()) ? null : d.toISOString();
-    }
-
     function formatSymbol(symbol) {
         // Convert "EURUSD" to "EUR/USD" for display
         if (!symbol) return "-";
@@ -2165,23 +2022,6 @@ export default function App() {
             if (names.includes("New York") && names.includes("Asian")) return "New York / Asian";
         }
         return "-";
-    }
-
-    function formatDuration(startValue, endValue) {
-        const start = parseCreatedAt(startValue);
-        const end = parseCreatedAt(endValue);
-        if (!start || !end) return "-";
-        const diffMs = end.getTime() - start.getTime();
-        if (diffMs < 0) return "-";
-        const totalMinutes = Math.floor(diffMs / 60000);
-        const days = Math.floor(totalMinutes / 1440);
-        const hours = Math.floor((totalMinutes % 1440) / 60);
-        const minutes = totalMinutes % 60;
-        const parts = [];
-        if (days) parts.push(`${days}d`);
-        if (hours || days) parts.push(`${hours}h`);
-        parts.push(`${minutes}m`);
-        return parts.join(" ");
     }
 
     function logout() {
@@ -3223,56 +3063,6 @@ export default function App() {
         return Array.from(unique).sort();
     }, [trades]);
 
-    function getDateRangeFromPreset(preset) {
-        const now = new Date();
-        if (preset === "today") {
-            const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
-            const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
-            return { start, end };
-        }
-        if (preset === "week") {
-            const day = now.getDay();
-            const diffToMonday = (day + 6) % 7;
-            const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - diffToMonday, 0, 0, 0, 0);
-            const end = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 6, 23, 59, 59, 999);
-            return { start, end };
-        }
-        if (preset === "month") {
-            const start = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
-            const end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
-            return { start, end };
-        }
-        if (preset === "year") {
-            const start = new Date(now.getFullYear(), 0, 1, 0, 0, 0, 0);
-            const end = new Date(now.getFullYear(), 11, 31, 23, 59, 59, 999);
-            return { start, end };
-        }
-        return { start: null, end: null };
-    }
-
-    function matchesDatePreset(dateValue, preset, customFrom, customTo) {
-        if (preset === "all") return true;
-        const createdAt = parseCreatedAt(dateValue);
-        if (!createdAt) return false;
-        if (preset === "custom") {
-            if (customFrom) {
-                const from = new Date(customFrom);
-                from.setHours(0, 0, 0, 0);
-                if (createdAt < from) return false;
-            }
-            if (customTo) {
-                const to = new Date(customTo);
-                to.setHours(23, 59, 59, 999);
-                if (createdAt > to) return false;
-            }
-            return true;
-        }
-        const range = getDateRangeFromPreset(preset);
-        if (range.start && createdAt < range.start) return false;
-        if (range.end && createdAt > range.end) return false;
-        return true;
-    }
-
     const ledgerEvents = useMemo(() => {
         const events = [];
         cashflows.forEach((cashflow) => {
@@ -3442,7 +3232,7 @@ export default function App() {
         let breakevenCount = 0;
         const epsilon = 1e-9;
         filteredTrades.forEach((trade) => {
-            const rValue = getOutcomeRForMode(trade);
+            const rValue = getOutcomeRForMode(trade, { statsMode, realizedLedgerByTrade: realizedLedger?.byTrade });
             if (Number.isFinite(rValue)) {
                 outcomes.push(rValue);
                 if (trade?.closedAt) {
@@ -3539,7 +3329,7 @@ export default function App() {
         periodTrades.forEach((trade) => {
             const entry = activeLedger.byTrade.get(trade.id);
             if (!entry || !Number.isFinite(entry.pnlMoney)) return;
-            const rValue = getOutcomeRForMode(trade);
+            const rValue = getOutcomeRForMode(trade, { statsMode, realizedLedgerByTrade: realizedLedger?.byTrade });
             if (Number.isFinite(rValue)) {
                 if (rValue < 0) {
                     currentLossRunR += rValue;
@@ -3661,7 +3451,7 @@ export default function App() {
         {
             header: "Realized R",
             accessorFn: (trade) => {
-                const realizedR = getRealizedRIfPresent(trade);
+                const realizedR = getRealizedRIfPresent(trade, realizedLedger?.byTrade);
                 return Number.isFinite(realizedR) ? realizedR.toFixed(4) : null;
             },
         },
@@ -3865,31 +3655,6 @@ export default function App() {
     }, [isRiskCalcXau, riskCalcContractSize]);
 
     const emDash = "\u2014";
-    const formatRValue = (value) => {
-        if (!Number.isFinite(value)) return emDash;
-        const sign = value > 0 ? "+" : "";
-        return `${sign}${value.toFixed(2)}R`;
-    };
-    const formatWinPct = (value) => {
-        if (!Number.isFinite(value)) return emDash;
-        const rounded = Math.round(value);
-        if (Math.abs(value - rounded) < 0.05) {
-            return `${rounded}%`;
-        }
-        return `${value.toFixed(1)}%`;
-    };
-    const formatCalcNumber = (value, decimals = 2) => {
-        if (!Number.isFinite(value)) return emDash;
-        return Number(value).toFixed(decimals);
-    };
-    const formatCalcInteger = (value) => {
-        if (!Number.isFinite(value)) return emDash;
-        return Math.round(value).toLocaleString();
-    };
-    const formatCalcPrice = (value, symbolValue) => {
-        if (!Number.isFinite(value)) return emDash;
-        return Number(value).toFixed(getPriceDecimals(symbolValue));
-    };
     const [copiedKey, setCopiedKey] = useState("");
     const copyTimeoutRef = useRef(null);
     const copyToClipboard = (value) => {
