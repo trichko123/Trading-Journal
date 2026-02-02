@@ -38,6 +38,7 @@ import AttachmentUploadModal from "./features/attachments/components/AttachmentU
 import AccountSettingsModal from "./features/account/components/AccountSettingsModal";
 import CashflowsModal from "./features/cashflows/components/CashflowsModal";
 import CashflowEditModal from "./features/cashflows/components/CashflowEditModal";
+import DeleteCashflowModal from "./features/cashflows/components/DeleteCashflowModal";
 import "./App.css";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080";
@@ -2721,46 +2722,14 @@ export default function App() {
                                 setCashflowEditNote={setCashflowEditNote}
                                 cashflowTypes={CASHFLOW_TYPES}
                             />
-                            {isCashflowDeleteOpen && (
-                                <>
-                                    <div
-                                        className="modal-backdrop"
-                                        onClick={() => {
-                                            setIsCashflowDeleteOpen(false);
-                                            setCashflowDeleteTarget(null);
-                                        }}
-                                    />
-                                    <div
-                                        className="modal"
-                                        role="dialog"
-                                        aria-modal="true"
-                                        aria-labelledby="cashflow-delete-title"
-                                        onClick={(e) => e.stopPropagation()}
-                                    >
-                                        <h3 className="modal-title" id="cashflow-delete-title">Delete cashflow?</h3>
-                                        <p className="modal-text">This action cannot be undone.</p>
-                                        <div className="modal-actions">
-                                            <button
-                                                type="button"
-                                                className="btn btn-ghost"
-                                                onClick={() => {
-                                                    setIsCashflowDeleteOpen(false);
-                                                    setCashflowDeleteTarget(null);
-                                                }}
-                                            >
-                                                Cancel
-                                            </button>
-                                            <button
-                                                type="button"
-                                                className="btn btn-danger"
-                                                onClick={confirmDeleteCashflow}
-                                            >
-                                                Delete
-                                            </button>
-                                        </div>
-                                    </div>
-                                </>
-                            )}
+                            <DeleteCashflowModal
+                                isOpen={isCashflowDeleteOpen}
+                                onClose={() => {
+                                    setIsCashflowDeleteOpen(false);
+                                    setCashflowDeleteTarget(null);
+                                }}
+                                onConfirm={confirmDeleteCashflow}
+                            />
                             <AccountSettingsModal
                                 isOpen={isAccountSettingsOpen}
                                 onClose={closeAccountSettingsModal}

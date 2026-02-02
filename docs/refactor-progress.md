@@ -66,6 +66,7 @@ Moved pure utilities from `frontend/trading-journal-ui/src/App.jsx` into:
 - frontend/trading-journal-ui/src/features/attachments/components/AttachmentLightbox.jsx
 - frontend/trading-journal-ui/src/features/attachments/components/AttachmentUploadModal.jsx
 - frontend/trading-journal-ui/src/features/account/components/AccountSettingsModal.jsx
+- frontend/trading-journal-ui/src/features/cashflows/components/DeleteCashflowModal.jsx
 - frontend/trading-journal-ui/src/features/cashflows/components/CashflowsModal.jsx
 - frontend/trading-journal-ui/src/features/cashflows/components/CashflowEditModal.jsx
 
@@ -104,3 +105,6 @@ Moved pure utilities from `frontend/trading-journal-ui/src/App.jsx` into:
 
 ## Phase 3.12b: CashflowEditModal extracted
 - frontend/trading-journal-ui/src/features/cashflows/components/CashflowEditModal.jsx
+
+## Phase 3.12c: DeleteCashflowModal extracted
+- frontend/trading-journal-ui/src/features/cashflows/components/DeleteCashflowModal.jsx
