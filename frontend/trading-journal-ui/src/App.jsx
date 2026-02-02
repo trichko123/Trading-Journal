@@ -33,6 +33,7 @@ import TradesTable from "./features/trades/components/TradesTable";
 import Pagination from "./shared/components/Pagination";
 import DeleteTradeModal from "./features/trades/components/DeleteTradeModal";
 import ReviewModal from "./features/trades/components/ReviewModal";
+import AttachmentLightbox from "./features/attachments/components/AttachmentLightbox";
 import "./App.css";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080";
@@ -3137,65 +3138,20 @@ export default function App() {
                                     </div>
                                 </>
                             )}
-                            {lightboxUrl && (
-                                <>
-                                    <div className="modal-backdrop" onClick={() => setLightboxUrl("")} />
-                                    <div
-                                        className="lightbox"
-                                        role="dialog"
-                                        aria-modal="true"
-                                        onClick={(e) => e.stopPropagation()}
-                                        onMouseMove={(e) => {
-                                            if (!lightboxDragging || lightboxScale <= 1) return;
-                                            const nextX = e.clientX - lightboxDragStart.x;
-                                            const nextY = e.clientY - lightboxDragStart.y;
-                                            setLightboxOffset({ x: nextX, y: nextY });
-                                        }}
-                                        onMouseUp={() => setLightboxDragging(false)}
-                                        onMouseLeave={() => setLightboxDragging(false)}
-                                    >
-                                        <button
-                                            type="button"
-                                            className="btn btn-ghost btn-sm lightbox-close"
-                                            aria-label="Close preview"
-                                            onClick={() => setLightboxUrl("")}
-                                        >
-                                            {"\u00d7"}
-                                        </button>
-                                        <img
-                                            src={lightboxUrl}
-                                            alt="Screenshot preview"
-                                            className={`lightbox-image${lightboxScale > 1 ? " is-zoomed" : ""}${
-                                                lightboxDragging ? " is-dragging" : ""
-                                            }`}
-                                            style={{
-                                                transform: `translate(${lightboxOffset.x}px, ${lightboxOffset.y}px) scale(${lightboxScale})`,
-                                                transformOrigin: "center center",
-                                            }}
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                if (lightboxScale > 1) {
-                                                    setLightboxScale(1);
-                                                    setLightboxOffset({ x: 0, y: 0 });
-                                                    setLightboxDragging(false);
-                                                    return;
-                                                }
-                                                setLightboxScale(2);
-                                            }}
-                                            onMouseDown={(e) => {
-                                                e.stopPropagation();
-                                                if (lightboxScale <= 1) return;
-                                                setLightboxDragging(true);
-                                                setLightboxDragStart({
-                                                    x: e.clientX - lightboxOffset.x,
-                                                    y: e.clientY - lightboxOffset.y,
-                                                });
-                                            }}
-                                        />
-                                        <p className="lightbox-hint">Click to zoom • Drag to move</p>
-                                    </div>
-                                </>
-                            )}
+                            <AttachmentLightbox
+                                isOpen={Boolean(lightboxUrl)}
+                                src={lightboxUrl}
+                                alt="Screenshot preview"
+                                onClose={() => setLightboxUrl("")}
+                                lightboxScale={lightboxScale}
+                                lightboxOffset={lightboxOffset}
+                                lightboxDragging={lightboxDragging}
+                                lightboxDragStart={lightboxDragStart}
+                                setLightboxOffset={setLightboxOffset}
+                                setLightboxDragging={setLightboxDragging}
+                                setLightboxDragStart={setLightboxDragStart}
+                                setLightboxScale={setLightboxScale}
+                            />
                             <DeleteTradeModal
                                 isOpen={isDeleteModalOpen}
                                 onCancel={() => setIsDeleteModalOpen(false)}
