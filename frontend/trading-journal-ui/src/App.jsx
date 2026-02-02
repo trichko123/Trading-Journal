@@ -27,6 +27,11 @@ import TradeDetailsPanelLeft from "./features/trades/components/TradeDetailsPane
 import TradeDetailsPanelRight from "./features/attachments/components/TradeDetailsPanelRight";
 import HeaderBar from "./app/layout/HeaderBar";
 import AuthCard from "./features/auth/components/AuthCard";
+import AddTradeForm from "./features/trades/components/AddTradeForm";
+import FiltersPanel from "./features/trades/components/FiltersPanel";
+import TradesTable from "./features/trades/components/TradesTable";
+import Pagination from "./shared/components/Pagination";
+import DeleteTradeModal from "./features/trades/components/DeleteTradeModal";
 import "./App.css";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080";
@@ -171,7 +176,6 @@ export default function App() {
         symbol: "all",
         direction: "all",
         status: "all",
-        session: "all",
     });
     const [datePreset, setDatePreset] = useState("all");
     const [showFilters, setShowFilters] = useState(false);
@@ -181,15 +185,6 @@ export default function App() {
     const pageSize = 10;
     const refreshBlocked = refreshBlockedUntil && Date.now() < refreshBlockedUntil;
     const refreshCooldownSeconds = refreshBlocked ? Math.ceil((refreshBlockedUntil - Date.now()) / 1000) : 0;
-
-    const SESSION_FILTER_OPTIONS = [
-        "London",
-        "New York",
-        "Asian",
-        "New York / London",
-        "Asian / London",
-        "New York / Asian",
-    ];
 
     function formatCashflowTypeLabel(value) {
         if (!value) return "Deposit";
@@ -1579,10 +1574,6 @@ export default function App() {
                 if (filters.status === "open" && isClosed) return false;
                 if (filters.status === "closed" && !isClosed) return false;
             }
-            if (filters.session !== "all") {
-                const label = getSessionLabel(trade.createdAt);
-                if (label !== filters.session) return false;
-            }
             if (datePreset !== "all" && !trade.closedAt) {
                 return false;
             }
@@ -1848,7 +1839,7 @@ export default function App() {
     }
 
     function clearFilters() {
-        setFilters({ symbol: "all", direction: "all", status: "all", session: "all" });
+        setFilters({ symbol: "all", direction: "all", status: "all" });
         setDatePreset("all");
         setFromDate("");
         setToDate("");
@@ -2112,100 +2103,22 @@ export default function App() {
                             </div>
                         )}
 
-                        <div className="card">
-                            <div className="card-header">
-                                <div>
-                                    <h2>Add Trade</h2>
-                                    <p className="subtitle">Fill in entry details. SL/TP are optional until you close the trade.</p>
-                                </div>
-                                <div className="card-header-actions">
-                                    <button
-                                        className="btn btn-sm risk-calc-btn"
-                                        type="button"
-                                        onClick={openRiskCalc}
-                                    >
-                                        Risk Calculator
-                                    </button>
-                                </div>
-                            </div>
-                            <form onSubmit={createTrade} className="trade-form">
-                                <label className="field">
-                                    <span>Symbol</span>
-                                    <select className="input select-scroll" value={symbol} onChange={(e) => setSymbol(e.target.value)}>
-                                        {INSTRUMENTS.map((pair) => (
-                                            <option key={pair.value} value={pair.value}>
-                                                {pair.label}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </label>
-                                <label className="field">
-                                    <span>Direction</span>
-                                    <select className="input" value={direction} onChange={(e) => setDirection(e.target.value)}>
-                                        <option value="LONG">LONG</option>
-                                        <option value="SHORT">SHORT</option>
-                                    </select>
-                                </label>
-                                <label className="field">
-                                    <span>Entry</span>
-                                    <input
-                                        className="input"
-                                        value={entryPrice}
-                                        onChange={(e) => setEntryPrice(e.target.value)}
-                                        placeholder="Entry price"
-                                        type="number"
-                                        step={getPriceStep(symbol)}
-                                        min="0"
-                                    />
-                                </label>
-                                <label className="field">
-                                    <span>Stop Loss</span>
-                                    <input
-                                        className="input"
-                                        value={stopLossPrice}
-                                        onChange={(e) => setStopLossPrice(e.target.value)}
-                                        placeholder="Stop loss"
-                                        type="number"
-                                        step={getPriceStep(symbol)}
-                                        min="0"
-                                    />
-                                </label>
-                                <label className="field">
-                                    <span>Take Profit</span>
-                                    <input
-                                        className="input"
-                                        value={takeProfitPrice}
-                                        onChange={(e) => setTakeProfitPrice(e.target.value)}
-                                        placeholder="Take profit"
-                                        type="number"
-                                        step={getPriceStep(symbol)}
-                                        min="0"
-                                    />
-                                </label>
-                                <div className="field">
-                                    <span>&nbsp;</span>
-                                    <button className="btn btn-primary" type="submit">Add trade</button>
-                                </div>
-                            </form>
-
-                                {(() => {
-                                    if (stopLossPrice === "" || takeProfitPrice === "") {
-                                        return (
-                                            <div className="helper-text">
-                                                SL/TP optional. Enter both to see distances and RR.
-                                            </div>
-                                        );
-                                    }
-                                    const derived = computeDerived(symbol, direction, entryPrice, stopLossPrice, takeProfitPrice);
-                                    return (
-                                        <div className="helper-text">
-                                            {derived
-                                                ? `SL ${getDisplayUnit(symbol)}: ${derived.slPips} | TP ${getDisplayUnit(symbol)}: ${derived.tpPips} | RR: ${derived.rrRatio}`
-                                                : "Entry, Stop Loss, and Take Profit must be valid and ordered correctly."}
-                                        </div>
-                                    );
-                                })()}
-                            </div>
+                        <AddTradeForm
+                            instruments={INSTRUMENTS}
+                            symbol={symbol}
+                            setSymbol={setSymbol}
+                            direction={direction}
+                            setDirection={setDirection}
+                            entryPrice={entryPrice}
+                            setEntryPrice={setEntryPrice}
+                            stopLossPrice={stopLossPrice}
+                            setStopLossPrice={setStopLossPrice}
+                            takeProfitPrice={takeProfitPrice}
+                            setTakeProfitPrice={setTakeProfitPrice}
+                            onSubmit={createTrade}
+                            onOpenRiskCalc={openRiskCalc}
+                            computeDerived={computeDerived}
+                        />
 
                         <div className="card">
                                 <div className="card-header">
@@ -2269,48 +2182,23 @@ export default function App() {
                                                 {isExporting ? "Exporting..." : "Export CSV"}
                                             </button>
                                         </div>
-                                        <div className="table-header-filters">
-                                            <button
-                                                className="btn btn-ghost btn-sm"
-                                                type="button"
-                                                onClick={() => setShowFilters((v) => !v)}
-                                            >
-                                                {showFilters ? "Hide filters" : "Show filters"}
-                                            </button>
-                                            {showFilters && (
-                                                <button className="btn btn-ghost btn-sm" type="button" onClick={clearFilters}>
-                                                    Clear filters
-                                                </button>
-                                            )}
-                                        </div>
+                                        <FiltersPanel
+                                            variant="headerButtons"
+                                            showFilters={showFilters}
+                                            onToggleFilters={() => setShowFilters((v) => !v)}
+                                            onClearFilters={clearFilters}
+                                        />
                                     </div>
                                 </div>
-                                <div className="filter-bar">
-                                    <div className="filter-actions">
-                                        {showFilters && datePreset === "custom" && (
-                                            <div className="filter-range">
-                                                <label className="filter-field">
-                                                    <span>Closed: From</span>
-                                                    <input
-                                                        className="input filter-input"
-                                                        type="date"
-                                                        value={fromDate}
-                                                        onChange={(e) => setFromDate(e.target.value)}
-                                                    />
-                                                </label>
-                                                <label className="filter-field">
-                                                    <span>Closed: To</span>
-                                                    <input
-                                                        className="input filter-input"
-                                                        type="date"
-                                                        value={toDate}
-                                                        onChange={(e) => setToDate(e.target.value)}
-                                                    />
-                                                </label>
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
+                                <FiltersPanel
+                                    variant="filterBar"
+                                    showFilters={showFilters}
+                                    datePreset={datePreset}
+                                    fromDate={fromDate}
+                                    toDate={toDate}
+                                    onChangeFromDate={(e) => setFromDate(e.target.value)}
+                                    onChangeToDate={(e) => setToDate(e.target.value)}
+                                />
                                 <div className="summary-bar">
                                     <div className="summary-stat">
                                         <span className="summary-label">Result (R)</span>
@@ -2420,188 +2308,48 @@ export default function App() {
                                         </div>
                                     )}
                                 </div>
-                            <div className="table-wrap">
-                                <table className="table">
-                                    <thead>
-                                    <tr>
-                                        <th>Symbol</th>
-                                        <th>Direction</th>
-                                        <th>Status</th>
-                                        <th className="num">Entry</th>
-                                        <th className="num">Exit</th>
-                                        <th className="num">Outcome</th>
-                                        {statsMode === "realized" && <th className="num">Net P/L (Broker)</th>}
-                                        <th>Created</th>
-                                        <th>Closed date</th>
-                                    </tr>
-                                    {showFilters && (
-                                        <tr className="filter-row">
-                                            <th>
-                                                <select
-                                                    className="input filter-input"
-                                                    value={filters.symbol}
-                                                    onChange={(e) => setFilters((prev) => ({ ...prev, symbol: e.target.value }))}
-                                                    aria-label="Filter by symbol"
-                                                >
-                                                    <option value="all">All</option>
-                                                    {symbolOptions.map((option) => (
-                                                        <option key={option} value={option}>
-                                                            {formatSymbol(option)}
-                                                        </option>
-                                                    ))}
-                                                </select>
-                                            </th>
-                                            <th>
-                                                <select
-                                                    className="input filter-input"
-                                                    value={filters.direction}
-                                                    onChange={(e) => setFilters((prev) => ({ ...prev, direction: e.target.value }))}
-                                                    aria-label="Filter by direction"
-                                                >
-                                                    <option value="all">All</option>
-                                                    <option value="LONG">LONG</option>
-                                                    <option value="SHORT">SHORT</option>
-                                                </select>
-                                            </th>
-                                            <th>
-                                                <select
-                                                    className="input filter-input"
-                                                    value={filters.status}
-                                                    onChange={(e) => setFilters((prev) => ({ ...prev, status: e.target.value }))}
-                                                    aria-label="Filter by status"
-                                                >
-                                                    <option value="all">All</option>
-                                                    <option value="open">Open</option>
-                                                    <option value="closed">Closed</option>
-                                                </select>
-                                            </th>
-                                            <th />
-                                            <th />
-                                            <th />
-                                            {statsMode === "realized" && <th />}
-                                            <th />
-                                            <th>
-                                                <select
-                                                    className="input filter-input"
-                                                    value={datePreset}
-                                                    onChange={(e) => setDatePreset(e.target.value)}
-                                                    aria-label="Filter by closed date"
-                                                >
-                                                    <option value="all">All</option>
-                                                    <option value="today">Today</option>
-                                                    <option value="week">This week</option>
-                                                    <option value="month">This month</option>
-                                                    <option value="year">This year</option>
-                                                    <option value="custom">Custom range</option>
-                                                </select>
-                                            </th>
-                                        </tr>
-                                    )}
-                                    </thead>
-
-                                    <tbody>
-                                    {sortedTrades.length === 0 ? (
-                                        <tr>
-                                        <td className="empty" colSpan={tableColSpan}>No trades yet.</td>
-                                    </tr>
-                                    ) : (
-                                        pagedTrades.map((t) => (
-                                            <tr
-                                                key={t.id}
-                                                className={`trade-row${selectedTradeForDetails?.id === t.id && isDetailsOpen ? " trade-row--selected" : ""}`}
-                                                onMouseDown={(e) => e.stopPropagation()}
-                                                onClick={() => openTradeDetails(t)}
-                                            >
-                                                <>
-                                                    <td>{formatSymbol(t.symbol)}</td>
-                                                    <td>{t.direction}</td>
-                                                    <td>
-                                                        {t.closedAt ? (
-                                                            <span className="status-pill status-pill--closed">CLOSED</span>
-                                                        ) : (
-                                                            <span className="status-pill status-pill--open">OPEN</span>
-                                                        )}
-                                                    </td>
-                                                    <td className="num">{formatPriceValue(t.entryPrice, t.symbol) ?? "-"}</td>
-                                                    <td className="num">
-                                                        {t.closedAt ? (formatPriceValue(t.exitPrice, t.symbol) ?? "\u2014") : "\u2014"}
-                                                    </td>
-                                                    <td className="num">
-                                                        <span className={getOutcomeClass(t)}>{formatOutcome(t)}</span>
-                                                    </td>
-                                                    {statsMode === "realized" && (
-                                                        <td className="num">
-                                                            {(() => {
-                                                                const hasNet = isNetPnlPresent(t);
-                                                                const netValue = hasNet ? Number(t.netPnlMoney) : null;
-                                                                const display = formatMoneyNullable(netValue, accountSettings?.currency);
-                                                                const toneClass = hasNet
-                                                                    ? netValue > 0
-                                                                        ? " is-positive"
-                                                                        : netValue < 0
-                                                                            ? " is-negative"
-                                                                            : ""
-                                                                    : " is-muted";
-                                                                return (
-                                                                    <span className={`summary-value${toneClass}`}>
-                                                                        {display}
-                                                                    </span>
-                                                                );
-                                                            })()}
-                                                        </td>
-                                                    )}
-                                                    <td>{formatDate(t.createdAt)}</td>
-                                                    <td>{formatDate(t.closedAt)}</td>
-                                                </>
-                                            </tr>
-                                        ))
-                                    )}
-                                    </tbody>
-                                </table>
-                            </div>
-                            {totalPages > 1 && (
-                                <div className="pagination">
-                                    <button
-                                        className="btn btn-sm pagination-btn"
-                                        onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-                                        disabled={currentPage === 1}
-                                        type="button"
-                                    >
-                                        Prev
-                                    </button>
-                                    <div className="pagination-pages">
-                                        {paginationItems.map((item) => {
-                                            if (typeof item !== "number") {
-                                                return (
-                                                    <span key={item} className="pagination-ellipsis">
-                                                        ...
-                                                    </span>
-                                                );
-                                            }
-                                            const isActive = item === currentPage;
-                                            return (
-                                                <button
-                                                    key={item}
-                                                    className={`btn btn-sm pagination-btn${isActive ? " is-active" : ""}`}
-                                                    onClick={() => setCurrentPage(item)}
-                                                    type="button"
-                                                    aria-current={isActive ? "page" : undefined}
-                                                >
-                                                    {item}
-                                                </button>
-                                            );
-                                        })}
-                                    </div>
-                                    <button
-                                        className="btn btn-sm pagination-btn"
-                                        onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
-                                        disabled={currentPage === totalPages || totalPages === 0}
-                                        type="button"
-                                    >
-                                        Next
-                                    </button>
-                                </div>
-                            )}
+                            <TradesTable
+                                trades={pagedTrades}
+                                totalCount={sortedTrades.length}
+                                tableColSpan={tableColSpan}
+                                statsMode={statsMode}
+                                selectedTradeId={selectedTradeForDetails?.id ?? null}
+                                isDetailsOpen={isDetailsOpen}
+                                onOpenDetails={openTradeDetails}
+                                formatSymbol={formatSymbol}
+                                formatPriceValue={formatPriceValue}
+                                formatOutcome={formatOutcome}
+                                getOutcomeClass={getOutcomeClass}
+                                isNetPnlPresent={isNetPnlPresent}
+                                formatMoneyNullable={formatMoneyNullable}
+                                moneyCurrency={accountSettings?.currency}
+                                formatDate={formatDate}
+                                filtersHeader={(
+                                    <FiltersPanel
+                                        variant="tableRows"
+                                        showFilters={showFilters}
+                                        datePreset={datePreset}
+                                        symbolFilter={filters.symbol}
+                                        directionFilter={filters.direction}
+                                        statusFilter={filters.status}
+                                        onChangeSymbol={(e) => setFilters((prev) => ({ ...prev, symbol: e.target.value }))}
+                                        onChangeDirection={(e) => setFilters((prev) => ({ ...prev, direction: e.target.value }))}
+                                        onChangeStatus={(e) => setFilters((prev) => ({ ...prev, status: e.target.value }))}
+                                        onChangeDatePreset={(e) => setDatePreset(e.target.value)}
+                                        symbolOptions={symbolOptions}
+                                        formatSymbol={formatSymbol}
+                                        showBrokerColumns={statsMode === "realized"}
+                                    />
+                                )}
+                            />
+                            <Pagination
+                                currentPage={currentPage}
+                                totalPages={totalPages}
+                                paginationItems={paginationItems}
+                                onPrev={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                                onNext={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+                                onGoToPage={(page) => setCurrentPage(page)}
+                            />
                             <TradeDetailsPanelLeft
                                 trade={selectedTradeForDetails}
                                 open={isDetailsOpen}
@@ -3447,37 +3195,11 @@ export default function App() {
                                     </div>
                                 </>
                             )}
-                            {isDeleteModalOpen && (
-                                <>
-                                    <div className="modal-backdrop" onClick={() => setIsDeleteModalOpen(false)} />
-                                    <div
-                                        className="modal"
-                                        role="dialog"
-                                        aria-modal="true"
-                                        aria-labelledby="delete-trade-title"
-                                        onClick={(e) => e.stopPropagation()}
-                                    >
-                                        <h3 className="modal-title" id="delete-trade-title">Delete trade?</h3>
-                                        <p className="modal-text">This action cannot be undone.</p>
-                                        <div className="modal-actions">
-                                            <button
-                                                type="button"
-                                                className="btn btn-ghost"
-                                                onClick={() => setIsDeleteModalOpen(false)}
-                                            >
-                                                Cancel
-                                            </button>
-                                            <button
-                                                type="button"
-                                                className="btn btn-danger"
-                                                onClick={confirmDeleteTrade}
-                                            >
-                                                Delete
-                                            </button>
-                                        </div>
-                                    </div>
-                                </>
-                            )}
+                            <DeleteTradeModal
+                                isOpen={isDeleteModalOpen}
+                                onCancel={() => setIsDeleteModalOpen(false)}
+                                onConfirm={confirmDeleteTrade}
+                            />
                             {isAttachmentDeleteModalOpen && (
                                 <>
                                     <div
