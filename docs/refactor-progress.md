@@ -62,6 +62,7 @@ Moved pure utilities from `frontend/trading-journal-ui/src/App.jsx` into:
 - frontend/trading-journal-ui/src/features/trades/components/FiltersPanel.jsx
 - frontend/trading-journal-ui/src/features/trades/components/TradesTable.jsx
 - frontend/trading-journal-ui/src/shared/components/Pagination.jsx
+- frontend/trading-journal-ui/src/features/trades/components/ReviewModal.jsx
 
 ## Phase 3.2: AuthCard extracted
 - frontend/trading-journal-ui/src/features/auth/components/AuthCard.jsx
@@ -80,3 +81,6 @@ Moved pure utilities from `frontend/trading-journal-ui/src/App.jsx` into:
 
 ## Phase 3.7: DeleteTradeModal extracted
 - frontend/trading-journal-ui/src/features/trades/components/DeleteTradeModal.jsx
+
+## Phase 3.8: ReviewModal extracted
+- frontend/trading-journal-ui/src/features/trades/components/ReviewModal.jsx
