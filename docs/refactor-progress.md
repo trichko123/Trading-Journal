@@ -1,0 +1,62 @@
+# Refactor Progress Tracker
+
+## Phases
+- [x] Phase 1: Extract pure utilities into modules
+- [x] Phase 2: Extract DetailRow + TradeDetailsPanelLeft/Right components
+- [ ] Phase 3: Extract modals and major UI sections
+- [ ] Phase 4: Extract hooks/state management (filters, pagination, drawers)
+- [ ] Phase 5: Extract API client + stats engine modules
+
+## Done (Phase 1)
+Moved pure utilities from `frontend/trading-journal-ui/src/App.jsx` into:
+
+- `frontend/trading-journal-ui/src/shared/lib/price.js`
+  - getPriceDecimals
+  - getPriceStep
+  - formatPriceValue
+- `frontend/trading-journal-ui/src/shared/lib/format.js`
+  - formatMoneyValue
+  - formatMoneyNullable
+  - formatPercentValue
+  - formatRValue
+  - formatWinPct
+- `frontend/trading-journal-ui/src/shared/lib/datetime.js`
+  - parseCreatedAt
+  - formatDate
+  - toIsoString
+  - toDateTimeLocalValue
+  - toIsoFromLocal
+  - getDateRangeFromPreset
+  - matchesDatePreset
+  - formatDuration
+- `frontend/trading-journal-ui/src/shared/lib/authToken.js`
+  - normalizeEmail
+  - base64UrlDecode
+  - tryExtractEmailFromIdToken
+- `frontend/trading-journal-ui/src/features/risk/utils/riskFormat.js`
+  - formatCalcNumber
+  - formatCalcInteger
+  - formatCalcPrice
+- `frontend/trading-journal-ui/src/features/stats/utils/outcomes.js`
+  - computeStrategyOutcomeR
+  - isNetPnlPresent
+  - getRealizedRIfPresent
+  - getOutcomeRForMode
+  - formatOutcome
+  - getOutcomeClass
+
+## Remaining (not moved yet)
+- Components: other UI blocks (modals, forms, tables)
+- Hooks/state: trade filters, pagination, drawer state, modal state, attachment flows
+- API layer: auth, trades, cashflows, attachments, review endpoints
+- Stats engine: ledgers, money metrics, summary stats
+
+## Rules
+- feature -> shared is allowed
+- shared -> feature is not allowed
+
+## Phase 3 started
+- frontend/trading-journal-ui/src/app/layout/HeaderBar.jsx
+
+## Phase 3.2: AuthCard extracted
+- frontend/trading-journal-ui/src/features/auth/components/AuthCard.jsx
