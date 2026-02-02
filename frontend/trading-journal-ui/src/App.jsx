@@ -34,6 +34,7 @@ import Pagination from "./shared/components/Pagination";
 import DeleteTradeModal from "./features/trades/components/DeleteTradeModal";
 import ReviewModal from "./features/trades/components/ReviewModal";
 import AttachmentLightbox from "./features/attachments/components/AttachmentLightbox";
+import AttachmentUploadModal from "./features/attachments/components/AttachmentUploadModal";
 import "./App.css";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080";
@@ -3058,99 +3059,26 @@ export default function App() {
                                     </div>
                                 </>
                             )}
-                            {isAttachModalOpen && (
-                                <>
-                                    <div className="modal-backdrop" onClick={closeAttachModal} />
-                                    <div
-                                        className="modal attach-modal"
-                                        role="dialog"
-                                        aria-modal="true"
-                                        aria-labelledby="attach-modal-title"
-                                        onClick={(e) => e.stopPropagation()}
-                                        onMouseDown={(e) => e.stopPropagation()}
-                                    >
-                                        <h3 className="modal-title" id="attach-modal-title">
-                                            Attach screenshot{attachSection ? ` (${attachSection.toLowerCase()})` : ""}
-                                        </h3>
-                                        <div
-                                            className={`attach-dropzone${isAttachmentDragOver ? " is-dragover" : ""}`}
-                                            onDrop={handleAttachmentDrop}
-                                            onDragOver={handleAttachmentDragOver}
-                                            onDragLeave={handleAttachmentDragLeave}
-                                        >
-                                            {attachPreviewUrl ? (
-                                                <img src={attachPreviewUrl} alt="Attachment preview" />
-                                            ) : (
-                                                <div className="attach-dropzone-content">
-                                                    <p>Drop an image here</p>
-                                                    <p>Paste from clipboard (Ctrl+V)</p>
-                                                    <p>or choose from PC</p>
-                                                    <button
-                                                        type="button"
-                                                        className="btn btn-ghost btn-sm"
-                                                        onClick={() => attachmentInputRef.current?.click()}
-                                                    >
-                                                        Attach from PC
-                                                    </button>
-                                                </div>
-                                            )}
-                                            <input
-                                                ref={attachmentInputRef}
-                                                type="file"
-                                                accept="image/png,image/jpeg,image/webp"
-                                                className="attach-file-input"
-                                                onChange={(e) => handleAttachmentFile(e.target.files?.[0])}
-                                            />
-                                        </div>
-                                        {attachError && <p className="attach-error">{attachError}</p>}
-                                        {attachPreviewUrl && (
-                                            <div className="modal-actions attach-actions">
-                                                <button
-                                                    type="button"
-                                                    className="btn btn-ghost"
-                                                    onClick={resetAttachmentPreview}
-                                                    disabled={isUploadingAttachment}
-                                                >
-                                                    Replace
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    className="btn btn-ghost"
-                                                    onClick={closeAttachModal}
-                                                    disabled={isUploadingAttachment}
-                                                >
-                                                    Cancel
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    className="btn btn-primary"
-                                                    onClick={(e) => {
-                                                        e.preventDefault();
-                                                        e.stopPropagation();
-                                                        confirmAttachmentUpload();
-                                                    }}
-                                                    disabled={isUploadingAttachment}
-                                                >
-                                                    {isUploadingAttachment ? "Uploading\u2026" : "Confirm"}
-                                                </button>
-                                            </div>
-                                        )}
-                                    </div>
-                                </>
-                            )}
-                            <AttachmentLightbox
-                                isOpen={Boolean(lightboxUrl)}
-                                src={lightboxUrl}
-                                alt="Screenshot preview"
-                                onClose={() => setLightboxUrl("")}
-                                lightboxScale={lightboxScale}
-                                lightboxOffset={lightboxOffset}
-                                lightboxDragging={lightboxDragging}
-                                lightboxDragStart={lightboxDragStart}
-                                setLightboxOffset={setLightboxOffset}
-                                setLightboxDragging={setLightboxDragging}
-                                setLightboxDragStart={setLightboxDragStart}
-                                setLightboxScale={setLightboxScale}
+                            <AttachmentUploadModal
+                                isOpen={isAttachModalOpen}
+                                onClose={closeAttachModal}
+                                attachSection={attachSection}
+                                isAttachmentDragOver={isAttachmentDragOver}
+                                onDrop={handleAttachmentDrop}
+                                onDragOver={handleAttachmentDragOver}
+                                onDragLeave={handleAttachmentDragLeave}
+                                attachPreviewUrl={attachPreviewUrl}
+                                attachmentInputRef={attachmentInputRef}
+                                onPickFile={() => attachmentInputRef.current?.click()}
+                                onFileChange={(e) => handleAttachmentFile(e.target.files?.[0])}
+                                attachError={attachError}
+                                onReplace={resetAttachmentPreview}
+                                onConfirm={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    confirmAttachmentUpload();
+                                }}
+                                isUploadingAttachment={isUploadingAttachment}
                             />
                             <DeleteTradeModal
                                 isOpen={isDeleteModalOpen}
