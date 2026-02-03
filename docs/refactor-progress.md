@@ -120,3 +120,6 @@ Moved pure utilities from `frontend/trading-journal-ui/src/App.jsx` into:
 - frontend/trading-journal-ui/src/features/trades/hooks/useTradesFilters.js
 
 ## Phase 4.2b: filteredTrades memo moved into useTradesFilters
+
+## Phase 4.3: useUIState hook extracted (modals/drawer state)
+- frontend/trading-journal-ui/src/app/hooks/useUIState.js
