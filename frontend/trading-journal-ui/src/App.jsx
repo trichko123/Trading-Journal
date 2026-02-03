@@ -31,6 +31,7 @@ import AddTradeForm from "./features/trades/components/AddTradeForm";
 import FiltersPanel from "./features/trades/components/FiltersPanel";
 import TradesTable from "./features/trades/components/TradesTable";
 import Pagination from "./shared/components/Pagination";
+import usePagination from "./shared/hooks/usePagination";
 import DeleteTradeModal from "./features/trades/components/DeleteTradeModal";
 import ReviewModal from "./features/trades/components/ReviewModal";
 import AttachmentLightbox from "./features/attachments/components/AttachmentLightbox";
@@ -189,7 +190,6 @@ export default function App() {
     const [showFilters, setShowFilters] = useState(false);
     const [fromDate, setFromDate] = useState("");
     const [toDate, setToDate] = useState("");
-    const [currentPage, setCurrentPage] = useState(1);
     const pageSize = 10;
     const refreshBlocked = refreshBlockedUntil && Date.now() < refreshBlockedUntil;
     const refreshCooldownSeconds = refreshBlocked ? Math.ceil((refreshBlockedUntil - Date.now()) / 1000) : 0;
@@ -1782,27 +1782,19 @@ export default function App() {
     }, [realizedLedger, selectedTradeForDetails]);
 
     const sortedTrades = useMemo(() => filteredTrades, [filteredTrades]);
-    const totalPages = Math.ceil(sortedTrades.length / pageSize);
+    const {
+        currentPage,
+        setCurrentPage,
+        totalPages,
+        paginationItems,
+        goToPage,
+        nextPage,
+        prevPage,
+    } = usePagination({ totalItems: sortedTrades.length, pageSize, initialPage: 1 });
     const pagedTrades = useMemo(() => {
         const start = (currentPage - 1) * pageSize;
         return sortedTrades.slice(start, start + pageSize);
-    }, [sortedTrades, currentPage]);
-    const paginationItems = useMemo(() => {
-        if (totalPages <= 1) return [];
-        if (totalPages <= 7) {
-            return Array.from({ length: totalPages }, (_, i) => i + 1);
-        }
-        const items = [1];
-        const start = Math.max(2, currentPage - 2);
-        const end = Math.min(totalPages - 1, currentPage + 2);
-        if (start > 2) items.push("ellipsis-start");
-        for (let i = start; i <= end; i += 1) {
-            items.push(i);
-        }
-        if (end < totalPages - 1) items.push("ellipsis-end");
-        items.push(totalPages);
-        return items;
-    }, [currentPage, totalPages]);
+    }, [sortedTrades, currentPage, pageSize]);
     const tableColSpan = statsMode === "realized" ? 9 : 8;
 
     const tradeCsvColumns = [
@@ -1865,13 +1857,6 @@ export default function App() {
         setCurrentPage(1);
     }, [filters, datePreset, fromDate, toDate]);
 
-    useEffect(() => {
-        if (totalPages === 0) {
-            if (currentPage !== 1) setCurrentPage(1);
-            return;
-        }
-        if (currentPage > totalPages) setCurrentPage(totalPages);
-    }, [currentPage, totalPages]);
     useEffect(() => {
         if (!isDeleteModalOpen) return undefined;
         const handleKeydown = (event) => {
@@ -2354,9 +2339,9 @@ export default function App() {
                                 currentPage={currentPage}
                                 totalPages={totalPages}
                                 paginationItems={paginationItems}
-                                onPrev={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-                                onNext={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
-                                onGoToPage={(page) => setCurrentPage(page)}
+                                onPrev={prevPage}
+                                onNext={nextPage}
+                                onGoToPage={goToPage}
                             />
                             <TradeDetailsPanelLeft
                                 trade={selectedTradeForDetails}
