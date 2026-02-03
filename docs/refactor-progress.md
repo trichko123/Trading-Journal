@@ -3,8 +3,8 @@
 ## Phases
 - [x] Phase 1: Extract pure utilities into modules
 - [x] Phase 2: Extract DetailRow + TradeDetailsPanelLeft/Right components
-- [ ] Phase 3: Extract modals and major UI sections
-- [ ] Phase 4: Extract hooks/state management (filters, pagination, drawers)
+- [x] Phase 3: Extract modals and major UI sections
+- [x] Phase 4: Extract hooks/state management (filters, pagination, drawers)
 - [ ] Phase 5: Extract API client + stats engine modules
 
 ## Done (Phase 1)
@@ -126,3 +126,6 @@ Moved pure utilities from `frontend/trading-journal-ui/src/App.jsx` into:
 
 ## Phase 4.4: useAttachments hook extracted (load + grouping)
 - frontend/trading-journal-ui/src/features/attachments/hooks/useAttachments.js
+
+## Phase 4.5: useRiskCalculatorState hook extracted
+- frontend/trading-journal-ui/src/features/risk/hooks/useRiskCalculatorState.js
