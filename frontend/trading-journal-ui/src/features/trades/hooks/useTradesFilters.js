@@ -1,6 +1,8 @@
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 export default function useTradesFilters({
+    trades,
+    matchesDatePreset,
     initialSymbol = "all",
     initialDirection = "all",
     initialStatus = "all",
@@ -26,7 +28,41 @@ export default function useTradesFilters({
         setToDate("");
     }, []);
 
+    const filteredTrades = useMemo(() => {
+        if (!Array.isArray(trades)) return [];
+        return trades.filter((trade) => {
+            if (symbolFilter !== "all" && trade.symbol !== symbolFilter) {
+                return false;
+            }
+            if (directionFilter !== "all" && trade.direction !== directionFilter) {
+                return false;
+            }
+            if (statusFilter !== "all") {
+                const isClosed = Boolean(trade.closedAt);
+                if (statusFilter === "open" && isClosed) return false;
+                if (statusFilter === "closed" && !isClosed) return false;
+            }
+            if (datePreset !== "all" && !trade.closedAt) {
+                return false;
+            }
+            if (!matchesDatePreset(trade.closedAt, datePreset, fromDate, toDate)) {
+                return false;
+            }
+            return true;
+        });
+    }, [
+        trades,
+        symbolFilter,
+        directionFilter,
+        statusFilter,
+        datePreset,
+        fromDate,
+        toDate,
+        matchesDatePreset,
+    ]);
+
     return {
+        filteredTrades,
         symbolFilter,
         setSymbolFilter,
         directionFilter,

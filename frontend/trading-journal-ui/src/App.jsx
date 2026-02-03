@@ -183,6 +183,7 @@ export default function App() {
     const [refreshBlockedUntil, setRefreshBlockedUntil] = useState(0);
     const BASE_SESSION_OFFSET = 1; // GMT+1
     const {
+        filteredTrades,
         symbolFilter,
         setSymbolFilter,
         directionFilter,
@@ -199,6 +200,8 @@ export default function App() {
         setShowFilters,
         clearFilters,
     } = useTradesFilters({
+        trades,
+        matchesDatePreset,
         initialSymbol: "all",
         initialDirection: "all",
         initialStatus: "all",
@@ -1585,29 +1588,6 @@ export default function App() {
     }, [accountSettings, ledgerEvents]);
 
     const activeLedger = statsMode === "realized" ? realizedLedger : strategyLedger;
-
-    const filteredTrades = useMemo(() => {
-        return trades.filter((trade) => {
-            if (symbolFilter !== "all" && trade.symbol !== symbolFilter) {
-                return false;
-            }
-            if (directionFilter !== "all" && trade.direction !== directionFilter) {
-                return false;
-            }
-            if (statusFilter !== "all") {
-                const isClosed = Boolean(trade.closedAt);
-                if (statusFilter === "open" && isClosed) return false;
-                if (statusFilter === "closed" && !isClosed) return false;
-            }
-            if (datePreset !== "all" && !trade.closedAt) {
-                return false;
-            }
-            if (!matchesDatePreset(trade.closedAt, datePreset, fromDate, toDate)) {
-                return false;
-            }
-            return true;
-        });
-    }, [trades, symbolFilter, directionFilter, statusFilter, datePreset, fromDate, toDate]);
 
     const summaryStats = useMemo(() => {
         const outcomes = [];
