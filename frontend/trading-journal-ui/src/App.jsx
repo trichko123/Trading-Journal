@@ -2172,6 +2172,20 @@ export default function App() {
                                 setReviewConfidence={setReviewConfidence}
                                 isReviewSubmitting={isReviewSubmitting}
                             />
+                            <AttachmentLightbox
+                                isOpen={Boolean(lightboxUrl)}
+                                src={lightboxUrl}
+                                alt="Attachment preview"
+                                onClose={() => setLightboxUrl("")}
+                                lightboxScale={lightboxScale}
+                                lightboxOffset={lightboxOffset}
+                                lightboxDragging={lightboxDragging}
+                                lightboxDragStart={lightboxDragStart}
+                                setLightboxOffset={setLightboxOffset}
+                                setLightboxDragging={setLightboxDragging}
+                                setLightboxDragStart={setLightboxDragStart}
+                                setLightboxScale={setLightboxScale}
+                            />
                         </div>
                     </>
                 )}

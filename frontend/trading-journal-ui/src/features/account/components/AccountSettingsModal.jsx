@@ -76,7 +76,7 @@ export default function AccountSettingsModal({
                             value={accountSettingsCurrency}
                             onChange={(e) => setAccountSettingsCurrency(e.target.value)}
                         >
-                            <option value="">\u2014</option>
+                            <option value="">{"\u2014"}</option>
                             {accountCurrencies.map((currency) => (
                                 <option key={currency} value={currency}>
                                     {currency}
