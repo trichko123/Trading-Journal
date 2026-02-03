@@ -35,6 +35,7 @@ import usePagination from "./shared/hooks/usePagination";
 import useTradesFilters from "./features/trades/hooks/useTradesFilters";
 import useUIState from "./app/hooks/useUIState";
 import useAttachments from "./features/attachments/hooks/useAttachments";
+import useRiskCalculatorState from "./features/risk/hooks/useRiskCalculatorState";
 import DeleteTradeModal from "./features/trades/components/DeleteTradeModal";
 import ReviewModal from "./features/trades/components/ReviewModal";
 import AttachmentLightbox from "./features/attachments/components/AttachmentLightbox";
@@ -148,15 +149,6 @@ export default function App() {
     const [reviewConfidence, setReviewConfidence] = useState(5);
     const [reviewError, setReviewError] = useState("");
     const [isReviewSubmitting, setIsReviewSubmitting] = useState(false);
-    const [riskCalcAccountCurrency, setRiskCalcAccountCurrency] = useState("USD");
-    const [riskCalcBalance, setRiskCalcBalance] = useState("");
-    const [riskCalcRiskPercent, setRiskCalcRiskPercent] = useState("1.0");
-    const [riskCalcSymbol, setRiskCalcSymbol] = useState(symbol);
-    const [riskCalcEntryPrice, setRiskCalcEntryPrice] = useState("");
-    const [riskCalcStopLossPrice, setRiskCalcStopLossPrice] = useState("");
-    const [riskCalcConversionRate, setRiskCalcConversionRate] = useState("");
-    const [riskCalcContractSize, setRiskCalcContractSize] = useState("100");
-
     const [error, setError] = useState("");
     const [isLoading, setIsLoading] = useState(false);
     const [isExporting, setIsExporting] = useState(false);
@@ -212,6 +204,34 @@ export default function App() {
         selectedTradeId: selectedTradeForDetails?.id ?? null,
         isDetailsOpen,
         onError: setError,
+    });
+    const {
+        riskCalcAccountCurrency,
+        setRiskCalcAccountCurrency,
+        riskCalcBalance,
+        setRiskCalcBalance,
+        riskCalcRiskPercent,
+        setRiskCalcRiskPercent,
+        riskCalcSymbol,
+        setRiskCalcSymbol,
+        riskCalcEntryPrice,
+        setRiskCalcEntryPrice,
+        riskCalcStopLossPrice,
+        setRiskCalcStopLossPrice,
+        riskCalcConversionRate,
+        setRiskCalcConversionRate,
+        riskCalcContractSize,
+        setRiskCalcContractSize,
+    } = useRiskCalculatorState({
+        initialAccountCurrency: "USD",
+        initialBalance: "",
+        initialRiskPercent: "1.0",
+        initialSymbol: symbol,
+        initialEntryPrice: "",
+        initialStopLossPrice: "",
+        initialConversionRate: "",
+        initialContractSize: "100",
+        contractSizeStorageKey: "xau_contract_size",
     });
     const {
         filteredTrades,
@@ -1972,19 +1992,6 @@ export default function App() {
         riskCalcContractSizeValid,
         riskCalcContractSizeNum,
     ]);
-
-    useEffect(() => {
-        const stored = localStorage.getItem("xau_contract_size");
-        if (stored) {
-            setRiskCalcContractSize(stored);
-        }
-    }, []);
-
-    useEffect(() => {
-        if (isRiskCalcXau) {
-            localStorage.setItem("xau_contract_size", riskCalcContractSize);
-        }
-    }, [isRiskCalcXau, riskCalcContractSize]);
 
     const emDash = "\u2014";
     const [copiedKey, setCopiedKey] = useState("");
