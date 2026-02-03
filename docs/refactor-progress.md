@@ -123,3 +123,6 @@ Moved pure utilities from `frontend/trading-journal-ui/src/App.jsx` into:
 
 ## Phase 4.3: useUIState hook extracted (modals/drawer state)
 - frontend/trading-journal-ui/src/app/hooks/useUIState.js
+
+## Phase 4.4: useAttachments hook extracted (load + grouping)
+- frontend/trading-journal-ui/src/features/attachments/hooks/useAttachments.js

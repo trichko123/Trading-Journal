@@ -34,6 +34,7 @@ import Pagination from "./shared/components/Pagination";
 import usePagination from "./shared/hooks/usePagination";
 import useTradesFilters from "./features/trades/hooks/useTradesFilters";
 import useUIState from "./app/hooks/useUIState";
+import useAttachments from "./features/attachments/hooks/useAttachments";
 import DeleteTradeModal from "./features/trades/components/DeleteTradeModal";
 import ReviewModal from "./features/trades/components/ReviewModal";
 import AttachmentLightbox from "./features/attachments/components/AttachmentLightbox";
@@ -124,11 +125,6 @@ export default function App() {
     const [editSwapMoney, setEditSwapMoney] = useState("");
     const [confirmPassword, setConfirmPassword] = useState("");
     const [isDetailsEditing, setIsDetailsEditing] = useState(false);
-    const [attachmentsBySection, setAttachmentsBySection] = useState({
-        PREPARATION: [],
-        ENTRY: [],
-        EXIT: [],
-    });
     const [attachSection, setAttachSection] = useState(null);
     const [attachFile, setAttachFile] = useState(null);
     const [attachPreviewUrl, setAttachPreviewUrl] = useState("");
@@ -202,6 +198,21 @@ export default function App() {
         isRiskCalcOpen,
         setIsRiskCalcOpen,
     } = useUIState();
+    const {
+        attachmentsBySection,
+        setAttachmentsBySection,
+        attachmentsLoading,
+        attachmentsError,
+        resetAttachments,
+        reloadAttachments,
+    } = useAttachments({
+        token,
+        apiBase: API,
+        apiRoot: API_ROOT,
+        selectedTradeId: selectedTradeForDetails?.id ?? null,
+        isDetailsOpen,
+        onError: setError,
+    });
     const {
         filteredTrades,
         symbolFilter,
@@ -573,33 +584,6 @@ export default function App() {
         }
     }
 
-    async function loadAttachments(tradeId) {
-        if (!tradeId) return;
-        try {
-            const res = await fetch(`${API}/trades/${tradeId}/attachments`, {
-                headers: { Authorization: `Bearer ${token}` },
-            });
-            if (!res.ok) {
-                const txt = await res.text();
-                throw new Error(`Load attachments failed (${res.status}): ${txt}`);
-            }
-            const data = await res.json();
-            const next = { PREPARATION: [], ENTRY: [], EXIT: [] };
-            data.forEach((item) => {
-                if (!item?.section) return;
-                const imageUrl = item.imageUrl?.startsWith("/")
-                    ? `${API_ROOT}${item.imageUrl}`
-                    : item.imageUrl;
-                if (!next[item.section]) next[item.section] = [];
-                next[item.section].push({ ...item, imageUrl });
-            });
-            setAttachmentsBySection(next);
-        } catch (err) {
-            setError(String(err));
-            resetAttachments();
-        }
-    }
-
     function startEdit(trade) {
         setEditingId(trade.id);
         setEditSymbol(trade.symbol);
@@ -642,14 +626,6 @@ export default function App() {
         setEditCommissionMoney("");
         setEditSwapMoney("");
         setError("");
-    }
-
-    function resetAttachments() {
-        setAttachmentsBySection({
-            PREPARATION: [],
-            ENTRY: [],
-            EXIT: [],
-        });
     }
 
     function openAttachModal(section) {
@@ -1066,14 +1042,6 @@ export default function App() {
         resetAttachments();
         cancelEdit();
     }
-
-    useEffect(() => {
-        if (!isDetailsOpen || !selectedTradeForDetails?.id) {
-            resetAttachments();
-            return;
-        }
-        loadAttachments(selectedTradeForDetails.id);
-    }, [isDetailsOpen, selectedTradeForDetails?.id]);
 
     async function updateTradeRequest(id, payload) {
         const res = await fetch(`${API}/trades/${id}`, {
