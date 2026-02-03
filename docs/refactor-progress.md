@@ -150,3 +150,6 @@ Moved pure utilities from `frontend/trading-journal-ui/src/App.jsx` into:
 
 ## Phase 5.6a: stats ledger engine extracted
 - frontend/trading-journal-ui/src/features/stats/engine/ledger.js
+
+## Phase 5.6b: summary stats engine extracted
+- frontend/trading-journal-ui/src/features/stats/engine/summaryStats.js

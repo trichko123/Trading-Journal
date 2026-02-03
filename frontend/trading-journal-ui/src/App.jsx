@@ -28,6 +28,7 @@ import {
     buildStrategyLedger,
     buildRealizedLedger,
 } from "./features/stats/engine/ledger";
+import { buildRealizedCoverage, buildSummaryStats } from "./features/stats/engine/summaryStats";
 import TradeDetailsPanelLeft from "./features/trades/components/TradeDetailsPanelLeft";
 import TradeDetailsPanelRight from "./features/attachments/components/TradeDetailsPanelRight";
 import HeaderBar from "./app/layout/HeaderBar";
@@ -1364,71 +1365,20 @@ export default function App() {
 
     const activeLedger = statsMode === "realized" ? realizedLedger : strategyLedger;
 
-    const summaryStats = useMemo(() => {
-        const outcomes = [];
-        let excluded = 0;
-        const confidences = [];
-        let winCount = 0;
-        let lossCount = 0;
-        let breakevenCount = 0;
-        const epsilon = 1e-9;
-        filteredTrades.forEach((trade) => {
-            const rValue = getOutcomeRForMode(trade, { statsMode, realizedLedgerByTrade: realizedLedger?.byTrade });
-            if (Number.isFinite(rValue)) {
-                outcomes.push(rValue);
-                if (trade?.closedAt) {
-                    if (Math.abs(rValue) < epsilon) {
-                        breakevenCount += 1;
-                    } else if (rValue > 0) {
-                        winCount += 1;
-                    } else {
-                        lossCount += 1;
-                    }
-                }
-            } else {
-                excluded += 1;
-            }
-            if (trade?.closedAt && Number.isFinite(trade.confidence)) {
-                confidences.push(trade.confidence);
-            }
-        });
-        const numericCount = outcomes.length;
-        const sum = outcomes.reduce((acc, value) => acc + value, 0);
-        const average = numericCount ? sum / numericCount : null;
-        const winPct = numericCount ? (winCount / numericCount) * 100 : null;
-        const confCount = confidences.length;
-        const confAverage = confCount
-            ? confidences.reduce((acc, value) => acc + value, 0) / confCount
-            : null;
-        return {
-            tradeCount: filteredTrades.length,
-            excluded,
-            numericCount,
-            sum,
-            average,
-            winPct,
-            confCount,
-            confAverage,
-            winCount,
-            lossCount,
-            breakevenCount,
-        };
-    }, [filteredTrades, statsMode, realizedLedger]);
+    const summaryStats = useMemo(
+        () => buildSummaryStats({
+            trades: filteredTrades,
+            statsMode,
+            realizedLedgerByTrade: realizedLedger?.byTrade,
+            getOutcomeRForMode,
+        }),
+        [filteredTrades, statsMode, realizedLedger, getOutcomeRForMode],
+    );
 
-    const realizedCoverage = useMemo(() => {
-        let total = 0;
-        let covered = 0;
-        filteredTrades.forEach((trade) => {
-            if (!trade?.closedAt) return;
-            const strategyR = computeStrategyOutcomeR(trade);
-            if (!Number.isFinite(strategyR)) return;
-            total += 1;
-            if (isNetPnlPresent(trade)) {
-                covered += 1;
-            }
-        });
-        return { total, covered };
-    }, [filteredTrades]);
+    const realizedCoverage = useMemo(
+        () => buildRealizedCoverage({ trades: filteredTrades }),
+        [filteredTrades],
+    );
 
     const moneyMetrics = useMemo(() => {
         if (!activeLedger?.byTrade) return null;
