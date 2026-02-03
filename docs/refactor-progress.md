@@ -147,3 +147,6 @@ Moved pure utilities from `frontend/trading-journal-ui/src/App.jsx` into:
 ## Phase 5.5: attachmentsApi migrated GET/POST/PATCH/DELETE
 - frontend/trading-journal-ui/src/features/attachments/api/attachmentsApi.js
 - frontend/trading-journal-ui/src/shared/api/http.js
+
+## Phase 5.6a: stats ledger engine extracted
+- frontend/trading-journal-ui/src/features/stats/engine/ledger.js
