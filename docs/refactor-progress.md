@@ -112,3 +112,6 @@ Moved pure utilities from `frontend/trading-journal-ui/src/App.jsx` into:
 
 ## Phase 3.13: RiskCalculatorModal extracted
 - frontend/trading-journal-ui/src/features/risk/components/RiskCalculatorModal.jsx
+
+## Phase 4.1: usePagination hook extracted
+- frontend/trading-journal-ui/src/shared/hooks/usePagination.js
