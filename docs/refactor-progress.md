@@ -5,7 +5,7 @@
 - [x] Phase 2: Extract DetailRow + TradeDetailsPanelLeft/Right components
 - [x] Phase 3: Extract modals and major UI sections
 - [x] Phase 4: Extract hooks/state management (filters, pagination, drawers)
-- [ ] Phase 5: Extract API client + stats engine modules
+- [x] Phase 5: Extract API client + stats engine modules
 
 ## Done (Phase 1)
 Moved pure utilities from `frontend/trading-journal-ui/src/App.jsx` into:
@@ -46,10 +46,10 @@ Moved pure utilities from `frontend/trading-journal-ui/src/App.jsx` into:
   - getOutcomeClass
 
 ## Remaining (not moved yet)
-- Components: other UI blocks (modals, forms, tables)
-- Hooks/state: trade filters, pagination, drawer state, modal state, attachment flows
-- API layer: auth, trades, cashflows, attachments, review endpoints
-- Stats engine: ledgers, money metrics, summary stats
+- Cleanup (unused imports, duplicate entries, formatting)
+- Lint/build verification
+- Deployment readiness checklist
+- Tests (optional)
 
 ## Rules
 - feature -> shared is allowed
@@ -158,4 +158,15 @@ Moved pure utilities from `frontend/trading-journal-ui/src/App.jsx` into:
 - frontend/trading-journal-ui/src/features/stats/engine/moneyMetrics.js
 
 ## Phase 5.6d: useStatsEngine hook extracted (composes ledger + stats + money)
+- frontend/trading-journal-ui/src/features/stats/hooks/useStatsEngine.js
+
+## Current module map
+- frontend/trading-journal-ui/src/shared/api/http.js
+- frontend/trading-journal-ui/src/features/trades/api/tradesApi.js
+- frontend/trading-journal-ui/src/features/account/api/accountApi.js
+- frontend/trading-journal-ui/src/features/cashflows/api/cashflowsApi.js
+- frontend/trading-journal-ui/src/features/attachments/api/attachmentsApi.js
+- frontend/trading-journal-ui/src/features/stats/engine/ledger.js
+- frontend/trading-journal-ui/src/features/stats/engine/summaryStats.js
+- frontend/trading-journal-ui/src/features/stats/engine/moneyMetrics.js
 - frontend/trading-journal-ui/src/features/stats/hooks/useStatsEngine.js
