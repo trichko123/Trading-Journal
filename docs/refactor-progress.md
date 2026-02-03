@@ -115,3 +115,6 @@ Moved pure utilities from `frontend/trading-journal-ui/src/App.jsx` into:
 
 ## Phase 4.1: usePagination hook extracted
 - frontend/trading-journal-ui/src/shared/hooks/usePagination.js
+
+## Phase 4.2a: useTradesFilters hook extracted (state/handlers)
+- frontend/trading-journal-ui/src/features/trades/hooks/useTradesFilters.js

@@ -32,6 +32,7 @@ import FiltersPanel from "./features/trades/components/FiltersPanel";
 import TradesTable from "./features/trades/components/TradesTable";
 import Pagination from "./shared/components/Pagination";
 import usePagination from "./shared/hooks/usePagination";
+import useTradesFilters from "./features/trades/hooks/useTradesFilters";
 import DeleteTradeModal from "./features/trades/components/DeleteTradeModal";
 import ReviewModal from "./features/trades/components/ReviewModal";
 import AttachmentLightbox from "./features/attachments/components/AttachmentLightbox";
@@ -181,15 +182,31 @@ export default function App() {
     const [isExporting, setIsExporting] = useState(false);
     const [refreshBlockedUntil, setRefreshBlockedUntil] = useState(0);
     const BASE_SESSION_OFFSET = 1; // GMT+1
-    const [filters, setFilters] = useState({
-        symbol: "all",
-        direction: "all",
-        status: "all",
+    const {
+        symbolFilter,
+        setSymbolFilter,
+        directionFilter,
+        setDirectionFilter,
+        statusFilter,
+        setStatusFilter,
+        datePreset,
+        setDatePreset,
+        fromDate,
+        setFromDate,
+        toDate,
+        setToDate,
+        showFilters,
+        setShowFilters,
+        clearFilters,
+    } = useTradesFilters({
+        initialSymbol: "all",
+        initialDirection: "all",
+        initialStatus: "all",
+        initialDatePreset: "all",
+        initialFromDate: "",
+        initialToDate: "",
+        initialShowFilters: false,
     });
-    const [datePreset, setDatePreset] = useState("all");
-    const [showFilters, setShowFilters] = useState(false);
-    const [fromDate, setFromDate] = useState("");
-    const [toDate, setToDate] = useState("");
     const pageSize = 10;
     const refreshBlocked = refreshBlockedUntil && Date.now() < refreshBlockedUntil;
     const refreshCooldownSeconds = refreshBlocked ? Math.ceil((refreshBlockedUntil - Date.now()) / 1000) : 0;
@@ -1571,16 +1588,16 @@ export default function App() {
 
     const filteredTrades = useMemo(() => {
         return trades.filter((trade) => {
-            if (filters.symbol !== "all" && trade.symbol !== filters.symbol) {
+            if (symbolFilter !== "all" && trade.symbol !== symbolFilter) {
                 return false;
             }
-            if (filters.direction !== "all" && trade.direction !== filters.direction) {
+            if (directionFilter !== "all" && trade.direction !== directionFilter) {
                 return false;
             }
-            if (filters.status !== "all") {
+            if (statusFilter !== "all") {
                 const isClosed = Boolean(trade.closedAt);
-                if (filters.status === "open" && isClosed) return false;
-                if (filters.status === "closed" && !isClosed) return false;
+                if (statusFilter === "open" && isClosed) return false;
+                if (statusFilter === "closed" && !isClosed) return false;
             }
             if (datePreset !== "all" && !trade.closedAt) {
                 return false;
@@ -1590,7 +1607,7 @@ export default function App() {
             }
             return true;
         });
-    }, [trades, filters, datePreset, fromDate, toDate]);
+    }, [trades, symbolFilter, directionFilter, statusFilter, datePreset, fromDate, toDate]);
 
     const summaryStats = useMemo(() => {
         const outcomes = [];
@@ -1838,13 +1855,6 @@ export default function App() {
         }
     }
 
-    function clearFilters() {
-        setFilters({ symbol: "all", direction: "all", status: "all" });
-        setDatePreset("all");
-        setFromDate("");
-        setToDate("");
-    }
-
     useEffect(() => {
         if (token) {
             loadTrades({ force: true });
@@ -1855,7 +1865,7 @@ export default function App() {
 
     useEffect(() => {
         setCurrentPage(1);
-    }, [filters, datePreset, fromDate, toDate]);
+    }, [symbolFilter, directionFilter, statusFilter, datePreset, fromDate, toDate]);
 
     useEffect(() => {
         if (!isDeleteModalOpen) return undefined;
@@ -2322,12 +2332,12 @@ export default function App() {
                                         variant="tableRows"
                                         showFilters={showFilters}
                                         datePreset={datePreset}
-                                        symbolFilter={filters.symbol}
-                                        directionFilter={filters.direction}
-                                        statusFilter={filters.status}
-                                        onChangeSymbol={(e) => setFilters((prev) => ({ ...prev, symbol: e.target.value }))}
-                                        onChangeDirection={(e) => setFilters((prev) => ({ ...prev, direction: e.target.value }))}
-                                        onChangeStatus={(e) => setFilters((prev) => ({ ...prev, status: e.target.value }))}
+                                        symbolFilter={symbolFilter}
+                                        directionFilter={directionFilter}
+                                        statusFilter={statusFilter}
+                                        onChangeSymbol={(e) => setSymbolFilter(e.target.value)}
+                                        onChangeDirection={(e) => setDirectionFilter(e.target.value)}
+                                        onChangeStatus={(e) => setStatusFilter(e.target.value)}
                                         onChangeDatePreset={(e) => setDatePreset(e.target.value)}
                                         symbolOptions={symbolOptions}
                                         formatSymbol={formatSymbol}
