@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { getAttachmentsForTrade } from "../api/attachmentsApi";
+import { getUserMessage } from "../../../shared/api/http";
 
 const EMPTY_SECTIONS = { PREPARATION: [], ENTRY: [], EXIT: [] };
 
@@ -39,7 +40,7 @@ export default function useAttachments({
             setAttachments(Array.isArray(data) ? data : []);
             setAttachmentsBySection(next);
         } catch (err) {
-            const message = String(err);
+            const message = getUserMessage(err);
             setAttachmentsError(message);
             if (onError) onError(message);
             resetAttachments();

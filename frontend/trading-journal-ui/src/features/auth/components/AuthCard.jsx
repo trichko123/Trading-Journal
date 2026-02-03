@@ -52,7 +52,13 @@ export default function AuthCard({
                 <h3>{authMode === "register" ? "Register" : "Login"}</h3>
                 <label className="field">
                     <span>Email</span>
-                    <input className="input" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" />
+                    <input
+                        className="input"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder="Email"
+                        autoComplete="email"
+                    />
                 </label>
                 <label className="field">
                     <span>Password</span>
@@ -62,6 +68,7 @@ export default function AuthCard({
                         onChange={(e) => setPassword(e.target.value)}
                         placeholder="Password"
                         type="password"
+                        autoComplete={authMode === "register" ? "new-password" : "current-password"}
                     />
                 </label>
                 {authMode === "register" && (
@@ -73,6 +80,7 @@ export default function AuthCard({
                             onChange={(e) => setConfirmPassword(e.target.value)}
                             placeholder="Confirm password"
                             type="password"
+                            autoComplete="new-password"
                         />
                     </label>
                 )}

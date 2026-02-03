@@ -40,28 +40,35 @@ export default function TradeDetailsPanelRight({
     }, []);
 
     useEffect(() => {
-        if (trade) {
-            setRenderTrade(trade);
-        }
+        if (!trade) return undefined;
+        const rafId = requestAnimationFrame(() => setRenderTrade(trade));
+        return () => cancelAnimationFrame(rafId);
     }, [trade]);
 
     useEffect(() => {
-        if (!open) {
-            setIsExpanded(false);
-        }
+        if (open) return undefined;
+        const rafId = requestAnimationFrame(() => setIsExpanded(false));
+        return () => cancelAnimationFrame(rafId);
     }, [open]);
 
     useEffect(() => {
+        let rafId;
         if (open) {
             if (closeTimeoutRef.current) {
                 clearTimeout(closeTimeoutRef.current);
             }
-            setShouldRender(true);
-            requestAnimationFrame(() => setIsVisible(true));
-            return undefined;
+            rafId = requestAnimationFrame(() => {
+                setShouldRender(true);
+                requestAnimationFrame(() => setIsVisible(true));
+            });
+            return () => {
+                if (rafId) {
+                    cancelAnimationFrame(rafId);
+                }
+            };
         }
         if (shouldRender) {
-            setIsVisible(false);
+            rafId = requestAnimationFrame(() => setIsVisible(false));
             closeTimeoutRef.current = setTimeout(() => {
                 setShouldRender(false);
             }, ANIMATION_MS + 20);
@@ -69,6 +76,9 @@ export default function TradeDetailsPanelRight({
         return () => {
             if (closeTimeoutRef.current) {
                 clearTimeout(closeTimeoutRef.current);
+            }
+            if (rafId) {
+                cancelAnimationFrame(rafId);
             }
         };
     }, [open, shouldRender]);
@@ -108,7 +118,7 @@ export default function TradeDetailsPanelRight({
         };
         document.addEventListener("mousedown", handlePointerDown);
         return () => document.removeEventListener("mousedown", handlePointerDown);
-    }, [isVisible, isMobile, onClose, isAttachModalOpen, isReviewModalOpen, otherPanelRef]);
+    }, [isVisible, isMobile, onClose, isAttachModalOpen, isReviewModalOpen, otherPanelRef, panelRef]);
 
     if (!shouldRender || !renderTrade) return null;
 

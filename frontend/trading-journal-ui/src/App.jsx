@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { exportToCsv } from "./utils/exportCsv";
+import { buildApiError, getUserMessage } from "./shared/api/http";
 import { INSTRUMENTS, getDisplayUnit, getInstrument, getTickSize } from "./constants/instruments";
 import { calculateRiskPosition } from "./utils/riskCalculator";
 import { getPriceStep, formatPriceValue } from "./shared/lib/price";
@@ -98,8 +99,8 @@ const CASHFLOW_TYPES = [
 const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 
 export default function App() {
-    const [email, setEmail] = useState("test@example.com");
-    const [password, setPassword] = useState("pass1234");
+    const [email, setEmail] = useState("");
+    const [password, setPassword] = useState("");
     const [token, setToken] = useState(localStorage.getItem("token") || "");
     const [authMode, setAuthMode] = useState("login");
     const [accountSettings, setAccountSettings] = useState(null);
@@ -174,6 +175,10 @@ export default function App() {
     const [isLoading, setIsLoading] = useState(false);
     const [isExporting, setIsExporting] = useState(false);
     const [refreshBlockedUntil, setRefreshBlockedUntil] = useState(0);
+    const isLoadingRef = useRef(false);
+    const refreshBlockedUntilRef = useRef(0);
+    const lastLoadedTokenRef = useRef("");
+    const initialLoadInFlightRef = useRef("");
     const BASE_SESSION_OFFSET = 1; // GMT+1
     const {
         selectedTradeForDetails,
@@ -214,10 +219,7 @@ export default function App() {
     const {
         attachmentsBySection,
         setAttachmentsBySection,
-        attachmentsLoading,
-        attachmentsError,
         resetAttachments,
-        reloadAttachments,
     } = useAttachments({
         token,
         apiBase: API,
@@ -327,11 +329,7 @@ export default function App() {
             });
 
             if (!res.ok) {
-                const txt = (await res.text()).trim();
-                const message = txt && !txt.startsWith("<")
-                    ? txt
-                    : `Google login failed (${res.status}).`;
-                throw new Error(message);
+                throw await buildApiError(res);
             }
 
             const data = await res.json();
@@ -343,8 +341,7 @@ export default function App() {
                 setEmail(emailFromToken);
             }
         } catch (err) {
-            const message = String(err).replace(/^Error:\s*/, "");
-            setError(message);
+            setError(getUserMessage(err));
         }
     }
 
@@ -360,15 +357,14 @@ export default function App() {
             });
 
             if (!res.ok) {
-                const txt = await res.text();
-                throw new Error(`Login failed (${res.status}): ${txt}`);
+                throw await buildApiError(res);
             }
 
             const data = await res.json();
             setToken(data.token);
             localStorage.setItem("token", data.token);
         } catch (err) {
-            setError(String(err));
+            setError(getUserMessage(err));
         }
     }
 
@@ -398,18 +394,13 @@ export default function App() {
             });
 
             if (!res.ok) {
-                const txt = (await res.text()).trim();
-                const message = txt && !txt.startsWith("<")
-                    ? txt
-                    : `Register failed (${res.status}).`;
-                throw new Error(message);
+                throw await buildApiError(res);
             }
 
             setEmail(normalizedEmail);
             await login();
         } catch (err) {
-            const message = String(err).replace(/^Error:\s*/, "");
-            setError(message);
+            setError(getUserMessage(err));
         }
     }
 
@@ -512,6 +503,12 @@ export default function App() {
         }, remainingMs);
         return () => clearTimeout(timeoutId);
     }, [refreshBlockedUntil]);
+    useEffect(() => {
+        isLoadingRef.current = isLoading;
+    }, [isLoading]);
+    useEffect(() => {
+        refreshBlockedUntilRef.current = refreshBlockedUntil;
+    }, [refreshBlockedUntil]);
 
     useEffect(() => {
         if (!attachFile) {
@@ -542,6 +539,30 @@ export default function App() {
         return () => window.removeEventListener("paste", handlePaste);
     }, [isAttachModalOpen]);
 
+    const resetAttachmentPreview = useCallback(() => {
+        setAttachFile(null);
+        setAttachError("");
+        if (attachmentInputRef.current) {
+            attachmentInputRef.current.value = "";
+        }
+    }, [attachmentInputRef, setAttachError, setAttachFile]);
+
+    const closeAttachModal = useCallback(() => {
+        setIsAttachModalOpen(false);
+        setAttachSection(null);
+        setAttachTradeId(null);
+        resetAttachmentPreview();
+        setIsAttachmentDragOver(false);
+        setIsUploadingAttachment(false);
+    }, [
+        resetAttachmentPreview,
+        setAttachSection,
+        setAttachTradeId,
+        setIsAttachModalOpen,
+        setIsAttachmentDragOver,
+        setIsUploadingAttachment,
+    ]);
+
     useEffect(() => {
         if (!isAttachModalOpen) return undefined;
         const handleKeydown = (event) => {
@@ -551,32 +572,37 @@ export default function App() {
         };
         window.addEventListener("keydown", handleKeydown);
         return () => window.removeEventListener("keydown", handleKeydown);
-    }, [isAttachModalOpen]);
+    }, [isAttachModalOpen, closeAttachModal]);
 
-    async function loadTrades({ force = false } = {}) {
-        if (isLoading) return;
+    const loadTrades = useCallback(async ({ force = false } = {}) => {
+        if (isLoadingRef.current) return;
         const now = Date.now();
-        if (!force && refreshBlockedUntil && now < refreshBlockedUntil) {
-            const seconds = Math.ceil((refreshBlockedUntil - now) / 1000);
+        const blockedUntil = refreshBlockedUntilRef.current;
+        if (!force && blockedUntil && now < blockedUntil) {
+            const seconds = Math.ceil((blockedUntil - now) / 1000);
             setError(`Please wait ${seconds}s before refreshing again.`);
             return;
         }
         if (!force) {
-            setRefreshBlockedUntil(now + REFRESH_COOLDOWN_MS);
+            const nextBlockedUntil = now + REFRESH_COOLDOWN_MS;
+            refreshBlockedUntilRef.current = nextBlockedUntil;
+            setRefreshBlockedUntil(nextBlockedUntil);
         }
         setError("");
+        isLoadingRef.current = true;
         setIsLoading(true);
         try {
             const data = await getTrades(API, token);
             setTrades(data);
         } catch (err) {
-            setError(String(err));
+            setError(getUserMessage(err));
         } finally {
             setIsLoading(false);
+            isLoadingRef.current = false;
         }
-    }
+    }, [token]);
 
-    async function loadAccountSettings() {
+    const loadAccountSettings = useCallback(async () => {
         if (!token) return;
         setAccountSettingsError("");
         try {
@@ -587,20 +613,20 @@ export default function App() {
                 setAccountSettings(null);
                 return;
             }
-            setAccountSettingsError(String(err));
+            setAccountSettingsError(getUserMessage(err));
         }
-    }
+    }, [token]);
 
-    async function loadCashflows() {
+    const loadCashflows = useCallback(async () => {
         if (!token) return;
         setCashflowError("");
         try {
             const data = await getCashflowsApi(API, token);
             setCashflows(Array.isArray(data) ? data : []);
         } catch (err) {
-            setCashflowError(String(err).replace(/^Error:\s*/, ""));
+            setCashflowError(getUserMessage(err));
         }
-    }
+    }, [token]);
 
     function startEdit(trade) {
         setEditingId(trade.id);
@@ -656,15 +682,6 @@ export default function App() {
         setIsAttachModalOpen(true);
     }
 
-    function closeAttachModal() {
-        setIsAttachModalOpen(false);
-        setAttachSection(null);
-        setAttachTradeId(null);
-        resetAttachmentPreview();
-        setIsAttachmentDragOver(false);
-        setIsUploadingAttachment(false);
-    }
-
     function openAccountSettingsModal() {
         setAccountSettingsError("");
         setAccountSettingsBalance(accountSettings?.startingBalance?.toString() || "");
@@ -673,10 +690,10 @@ export default function App() {
         setIsAccountSettingsOpen(true);
     }
 
-    function closeAccountSettingsModal() {
+    const closeAccountSettingsModal = useCallback(() => {
         setIsAccountSettingsOpen(false);
         setAccountSettingsError("");
-    }
+    }, [setAccountSettingsError, setIsAccountSettingsOpen]);
 
     async function saveAccountSettings() {
         if (isAccountSettingsSaving) return;
@@ -701,7 +718,7 @@ export default function App() {
             setAccountSettings(data);
             setIsAccountSettingsOpen(false);
         } catch (err) {
-            setAccountSettingsError(String(err).replace(/^Error:\s*/, ""));
+            setAccountSettingsError(getUserMessage(err));
         } finally {
             setIsAccountSettingsSaving(false);
         }
@@ -717,10 +734,10 @@ export default function App() {
         loadCashflows();
     }
 
-    function closeCashflowsModal() {
+    const closeCashflowsModal = useCallback(() => {
         setIsCashflowsOpen(false);
         setCashflowError("");
-    }
+    }, [setCashflowError, setIsCashflowsOpen]);
 
     function openCashflowEditModal(cashflow) {
         if (!cashflow) return;
@@ -733,11 +750,11 @@ export default function App() {
         setIsCashflowEditOpen(true);
     }
 
-    function closeCashflowEditModal() {
+    const closeCashflowEditModal = useCallback(() => {
         setIsCashflowEditOpen(false);
         setCashflowEditId(null);
         setCashflowEditError("");
-    }
+    }, [setCashflowEditError, setCashflowEditId, setIsCashflowEditOpen]);
 
     async function createCashflow() {
         if (isCashflowSaving) return;
@@ -769,7 +786,7 @@ export default function App() {
             setCashflowOccurredAt(toDateTimeLocalValue(new Date()));
             await loadCashflows();
         } catch (err) {
-            setCashflowError(String(err).replace(/^Error:\s*/, ""));
+            setCashflowError(getUserMessage(err));
         } finally {
             setIsCashflowSaving(false);
         }
@@ -802,7 +819,7 @@ export default function App() {
             closeCashflowEditModal();
             await loadCashflows();
         } catch (err) {
-            setCashflowEditError(String(err).replace(/^Error:\s*/, ""));
+            setCashflowEditError(getUserMessage(err));
         }
     }
 
@@ -812,7 +829,7 @@ export default function App() {
             await deleteCashflowApi(API, token, id);
             await loadCashflows();
         } catch (err) {
-            setCashflowError(String(err).replace(/^Error:\s*/, ""));
+            setCashflowError(getUserMessage(err));
         }
     }
 
@@ -841,14 +858,6 @@ export default function App() {
         }
         setAttachError("");
         setAttachFile(file);
-    }
-
-    function resetAttachmentPreview() {
-        setAttachFile(null);
-        setAttachError("");
-        if (attachmentInputRef.current) {
-            attachmentInputRef.current.value = "";
-        }
     }
 
     function handleAttachmentDrop(event) {
@@ -908,7 +917,7 @@ export default function App() {
             });
             closeAttachModal();
         } catch (err) {
-            setAttachError(String(err).replace(/^Error:\s*/, ""));
+            setAttachError(getUserMessage(err));
         } finally {
             setIsUploadingAttachment(false);
         }
@@ -936,7 +945,7 @@ export default function App() {
                 return next;
             });
         } catch (err) {
-            setError(String(err));
+            setError(getUserMessage(err));
         }
     }
 
@@ -956,7 +965,7 @@ export default function App() {
                 return next;
             });
         } catch (err) {
-            setError(String(err));
+            setError(getUserMessage(err));
         }
     }
 
@@ -1131,7 +1140,7 @@ export default function App() {
             setTrades((prev) => prev.map((trade) => (trade.id === updated.id ? updated : trade)));
             closeReviewModal();
         } catch (err) {
-            setReviewError(String(err).replace(/^Error:\s*/, ""));
+            setReviewError(getUserMessage(err));
         } finally {
             setIsReviewSubmitting(false);
         }
@@ -1247,7 +1256,7 @@ export default function App() {
             await loadTrades({ force: true });
             return true;
         } catch (err) {
-            setError(String(err));
+            setError(getUserMessage(err));
             return false;
         }
     }
@@ -1291,7 +1300,7 @@ export default function App() {
             await loadTrades({ force: true });
             return true;
         } catch (e) {
-            setError(String(e));
+            setError(getUserMessage(e));
             return false;
         }
     }
@@ -1329,7 +1338,7 @@ export default function App() {
             setTakeProfitPrice("");
             await loadTrades({ force: true });
         } catch (err) {
-            setError(String(err));
+            setError(getUserMessage(err));
         }
     }
 
@@ -1425,24 +1434,37 @@ export default function App() {
             const today = new Date().toISOString().slice(0, 10);
             exportToCsv(`trades_${today}.csv`, sortedTrades, tradeCsvColumns);
         } catch (err) {
-            const message = String(err).replace(/^Error:\s*/, "");
-            setError(message);
+            setError(getUserMessage(err));
         } finally {
             setIsExporting(false);
         }
     }
 
     useEffect(() => {
-        if (token) {
-            loadTrades({ force: true });
-            loadAccountSettings();
-            loadCashflows();
+        if (!token) {
+            lastLoadedTokenRef.current = "";
+            initialLoadInFlightRef.current = "";
+            return;
         }
-    }, [token]);
+        if (lastLoadedTokenRef.current === token || initialLoadInFlightRef.current === token) return;
+        lastLoadedTokenRef.current = token;
+        initialLoadInFlightRef.current = token;
+        const runInitialLoad = async () => {
+            await Promise.allSettled([
+                loadTrades({ force: true }),
+                loadAccountSettings(),
+                loadCashflows(),
+            ]);
+            if (initialLoadInFlightRef.current === token) {
+                initialLoadInFlightRef.current = "";
+            }
+        };
+        runInitialLoad();
+    }, [token, loadAccountSettings, loadCashflows, loadTrades]);
 
     useEffect(() => {
         setCurrentPage(1);
-    }, [symbolFilter, directionFilter, statusFilter, datePreset, fromDate, toDate]);
+    }, [symbolFilter, directionFilter, statusFilter, datePreset, fromDate, toDate, setCurrentPage]);
 
     useEffect(() => {
         if (!isDeleteModalOpen) return undefined;
@@ -1453,7 +1475,7 @@ export default function App() {
         };
         window.addEventListener("keydown", handleKeydown);
         return () => window.removeEventListener("keydown", handleKeydown);
-    }, [isDeleteModalOpen]);
+    }, [isDeleteModalOpen, setIsDeleteModalOpen]);
 
     useEffect(() => {
         if (!isAttachmentDeleteModalOpen) return undefined;
@@ -1465,7 +1487,7 @@ export default function App() {
         };
         window.addEventListener("keydown", handleKeydown);
         return () => window.removeEventListener("keydown", handleKeydown);
-    }, [isAttachmentDeleteModalOpen]);
+    }, [isAttachmentDeleteModalOpen, setAttachmentToDelete, setIsAttachmentDeleteModalOpen]);
 
     useEffect(() => {
         if (!isRiskCalcOpen) return undefined;
@@ -1476,7 +1498,7 @@ export default function App() {
         };
         window.addEventListener("keydown", handleKeydown);
         return () => window.removeEventListener("keydown", handleKeydown);
-    }, [isRiskCalcOpen]);
+    }, [isRiskCalcOpen, setIsRiskCalcOpen]);
 
     useEffect(() => {
         if (!isAccountSettingsOpen) return undefined;
@@ -1487,7 +1509,7 @@ export default function App() {
         };
         window.addEventListener("keydown", handleKeydown);
         return () => window.removeEventListener("keydown", handleKeydown);
-    }, [isAccountSettingsOpen]);
+    }, [isAccountSettingsOpen, closeAccountSettingsModal]);
 
     useEffect(() => {
         if (!isCashflowsOpen) return undefined;
@@ -1498,7 +1520,7 @@ export default function App() {
         };
         window.addEventListener("keydown", handleKeydown);
         return () => window.removeEventListener("keydown", handleKeydown);
-    }, [isCashflowsOpen]);
+    }, [isCashflowsOpen, closeCashflowsModal]);
 
     useEffect(() => {
         if (!isCashflowEditOpen) return undefined;
@@ -1509,7 +1531,7 @@ export default function App() {
         };
         window.addEventListener("keydown", handleKeydown);
         return () => window.removeEventListener("keydown", handleKeydown);
-    }, [isCashflowEditOpen]);
+    }, [isCashflowEditOpen, closeCashflowEditModal]);
 
     useEffect(() => {
         if (!isCashflowDeleteOpen) return undefined;
@@ -1521,7 +1543,7 @@ export default function App() {
         };
         window.addEventListener("keydown", handleKeydown);
         return () => window.removeEventListener("keydown", handleKeydown);
-    }, [isCashflowDeleteOpen]);
+    }, [isCashflowDeleteOpen, setCashflowDeleteTarget, setIsCashflowDeleteOpen]);
 
     useEffect(() => {
         if (!isAccountMenuOpen) return undefined;
@@ -1576,7 +1598,6 @@ export default function App() {
         riskCalcRiskPercent,
         riskCalcStopLossPrice,
         riskCalcSymbol,
-        riskCalcContractSize,
         isRiskCalcXau,
         riskCalcContractSizeValid,
         riskCalcContractSizeNum,
@@ -2193,4 +2214,5 @@ export default function App() {
         </div>
     );
 }
+
 

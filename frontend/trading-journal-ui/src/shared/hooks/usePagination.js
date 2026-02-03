@@ -23,11 +23,15 @@ export default function usePagination({ totalItems, pageSize, initialPage = 1 })
     }, [currentPage, totalPages]);
 
     useEffect(() => {
+        let nextPage = currentPage;
         if (totalPages === 0) {
-            if (currentPage !== 1) setCurrentPage(1);
-            return;
+            nextPage = 1;
+        } else if (currentPage > totalPages) {
+            nextPage = totalPages;
         }
-        if (currentPage > totalPages) setCurrentPage(totalPages);
+        if (nextPage === currentPage) return undefined;
+        const timeoutId = setTimeout(() => setCurrentPage(nextPage), 0);
+        return () => clearTimeout(timeoutId);
     }, [currentPage, totalPages]);
 
     const goToPage = useCallback((page) => {
