@@ -33,6 +33,7 @@ import TradesTable from "./features/trades/components/TradesTable";
 import Pagination from "./shared/components/Pagination";
 import usePagination from "./shared/hooks/usePagination";
 import useTradesFilters from "./features/trades/hooks/useTradesFilters";
+import useUIState from "./app/hooks/useUIState";
 import DeleteTradeModal from "./features/trades/components/DeleteTradeModal";
 import ReviewModal from "./features/trades/components/ReviewModal";
 import AttachmentLightbox from "./features/attachments/components/AttachmentLightbox";
@@ -79,7 +80,6 @@ export default function App() {
     const [token, setToken] = useState(localStorage.getItem("token") || "");
     const [authMode, setAuthMode] = useState("login");
     const [accountSettings, setAccountSettings] = useState(null);
-    const [isAccountSettingsOpen, setIsAccountSettingsOpen] = useState(false);
     const [accountSettingsBalance, setAccountSettingsBalance] = useState("");
     const [accountSettingsRiskPercent, setAccountSettingsRiskPercent] = useState("");
     const [accountSettingsCurrency, setAccountSettingsCurrency] = useState("");
@@ -87,22 +87,17 @@ export default function App() {
     const [isAccountSettingsSaving, setIsAccountSettingsSaving] = useState(false);
     const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
     const [cashflows, setCashflows] = useState([]);
-    const [isCashflowsOpen, setIsCashflowsOpen] = useState(false);
     const [cashflowType, setCashflowType] = useState("DEPOSIT");
     const [cashflowAmount, setCashflowAmount] = useState("");
     const [cashflowOccurredAt, setCashflowOccurredAt] = useState("");
     const [cashflowNote, setCashflowNote] = useState("");
     const [cashflowError, setCashflowError] = useState("");
     const [isCashflowSaving, setIsCashflowSaving] = useState(false);
-    const [cashflowEditId, setCashflowEditId] = useState(null);
     const [cashflowEditType, setCashflowEditType] = useState("DEPOSIT");
     const [cashflowEditAmount, setCashflowEditAmount] = useState("");
     const [cashflowEditOccurredAt, setCashflowEditOccurredAt] = useState("");
     const [cashflowEditNote, setCashflowEditNote] = useState("");
     const [cashflowEditError, setCashflowEditError] = useState("");
-    const [isCashflowEditOpen, setIsCashflowEditOpen] = useState(false);
-    const [cashflowDeleteTarget, setCashflowDeleteTarget] = useState(null);
-    const [isCashflowDeleteOpen, setIsCashflowDeleteOpen] = useState(false);
 
     const [trades, setTrades] = useState([]);
     const [statsMode, setStatsMode] = useState("strategy");
@@ -129,25 +124,17 @@ export default function App() {
     const [editSwapMoney, setEditSwapMoney] = useState("");
     const [confirmPassword, setConfirmPassword] = useState("");
     const [isDetailsEditing, setIsDetailsEditing] = useState(false);
-    const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-    const [isAttachmentDeleteModalOpen, setIsAttachmentDeleteModalOpen] = useState(false);
-    const [attachmentToDelete, setAttachmentToDelete] = useState(null);
-    const [selectedTradeForDetails, setSelectedTradeForDetails] = useState(null);
-    const [isDetailsOpen, setIsDetailsOpen] = useState(false);
     const [attachmentsBySection, setAttachmentsBySection] = useState({
         PREPARATION: [],
         ENTRY: [],
         EXIT: [],
     });
-    const [isAttachModalOpen, setIsAttachModalOpen] = useState(false);
     const [attachSection, setAttachSection] = useState(null);
-    const [attachTradeId, setAttachTradeId] = useState(null);
     const [attachFile, setAttachFile] = useState(null);
     const [attachPreviewUrl, setAttachPreviewUrl] = useState("");
     const [attachError, setAttachError] = useState("");
     const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
     const [isAttachmentDragOver, setIsAttachmentDragOver] = useState(false);
-    const [lightboxUrl, setLightboxUrl] = useState("");
     const [lightboxScale, setLightboxScale] = useState(1);
     const [lightboxOffset, setLightboxOffset] = useState({ x: 0, y: 0 });
     const [lightboxDragging, setLightboxDragging] = useState(false);
@@ -157,8 +144,6 @@ export default function App() {
     const rightPanelRef = useRef(null);
     const accountMenuRef = useRef(null);
     const accountMenuButtonRef = useRef(null);
-    const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
-    const [reviewTradeId, setReviewTradeId] = useState(null);
     const [reviewFollowedPlan, setReviewFollowedPlan] = useState("");
     const [reviewMistakesMode, setReviewMistakesMode] = useState("none");
     const [reviewMistakesText, setReviewMistakesText] = useState("");
@@ -167,7 +152,6 @@ export default function App() {
     const [reviewConfidence, setReviewConfidence] = useState(5);
     const [reviewError, setReviewError] = useState("");
     const [isReviewSubmitting, setIsReviewSubmitting] = useState(false);
-    const [isRiskCalcOpen, setIsRiskCalcOpen] = useState(false);
     const [riskCalcAccountCurrency, setRiskCalcAccountCurrency] = useState("USD");
     const [riskCalcBalance, setRiskCalcBalance] = useState("");
     const [riskCalcRiskPercent, setRiskCalcRiskPercent] = useState("1.0");
@@ -182,6 +166,42 @@ export default function App() {
     const [isExporting, setIsExporting] = useState(false);
     const [refreshBlockedUntil, setRefreshBlockedUntil] = useState(0);
     const BASE_SESSION_OFFSET = 1; // GMT+1
+    const {
+        selectedTradeForDetails,
+        setSelectedTradeForDetails,
+        isDetailsOpen,
+        setIsDetailsOpen,
+        isDeleteModalOpen,
+        setIsDeleteModalOpen,
+        isReviewModalOpen,
+        setIsReviewModalOpen,
+        reviewTradeId,
+        setReviewTradeId,
+        isAccountSettingsOpen,
+        setIsAccountSettingsOpen,
+        isCashflowsOpen,
+        setIsCashflowsOpen,
+        isCashflowEditOpen,
+        setIsCashflowEditOpen,
+        cashflowEditId,
+        setCashflowEditId,
+        isCashflowDeleteOpen,
+        setIsCashflowDeleteOpen,
+        cashflowDeleteTarget,
+        setCashflowDeleteTarget,
+        isAttachModalOpen,
+        setIsAttachModalOpen,
+        attachTradeId,
+        setAttachTradeId,
+        isAttachmentDeleteModalOpen,
+        setIsAttachmentDeleteModalOpen,
+        attachmentToDelete,
+        setAttachmentToDelete,
+        lightboxUrl,
+        setLightboxUrl,
+        isRiskCalcOpen,
+        setIsRiskCalcOpen,
+    } = useUIState();
     const {
         filteredTrades,
         symbolFilter,
