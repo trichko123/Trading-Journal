@@ -36,7 +36,13 @@ import useTradesFilters from "./features/trades/hooks/useTradesFilters";
 import useUIState from "./app/hooks/useUIState";
 import useAttachments from "./features/attachments/hooks/useAttachments";
 import useRiskCalculatorState from "./features/risk/hooks/useRiskCalculatorState";
-import { getTrades } from "./features/trades/api/tradesApi";
+import {
+    getTrades,
+    createTrade as createTradeApi,
+    updateTrade as updateTradeApi,
+    deleteTrade as deleteTradeApi,
+    submitTradeReview as submitTradeReviewApi,
+} from "./features/trades/api/tradesApi";
 import DeleteTradeModal from "./features/trades/components/DeleteTradeModal";
 import ReviewModal from "./features/trades/components/ReviewModal";
 import AttachmentLightbox from "./features/attachments/components/AttachmentLightbox";
@@ -1056,21 +1062,7 @@ export default function App() {
     }
 
     async function updateTradeRequest(id, payload) {
-        const res = await fetch(`${API}/trades/${id}`, {
-            method: "PUT",
-            headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify(payload),
-        });
-
-        if (!res.ok) {
-            const txt = await res.text();
-            throw new Error(`Update trade failed (${res.status}): ${txt}`);
-        }
-
-        return res.json();
+        return updateTradeApi(API, token, id, payload);
     }
 
     async function closeTradeInline(trade, {
@@ -1181,21 +1173,7 @@ export default function App() {
     }
 
     async function updateTradeReviewRequest(id, payload) {
-        const res = await fetch(`${API}/trades/${id}/review`, {
-            method: "PATCH",
-            headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify(payload),
-        });
-
-        if (!res.ok) {
-            const txt = await res.text();
-            throw new Error(`Update review failed (${res.status}): ${txt}`);
-        }
-
-        return res.json();
+        return submitTradeReviewApi(API, token, id, payload);
     }
 
     async function submitReview() {
@@ -1378,18 +1356,7 @@ export default function App() {
     async function deleteTrade(id) {
         setError("");
         try {
-            const res = await fetch(`${API}/trades/${id}`, {
-                method: "DELETE",
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                },
-            });
-
-            if (!res.ok) {
-                const txt = await res.text();
-                throw new Error(`Delete trade failed (${res.status}): ${txt}`);
-            }
-
+            await deleteTradeApi(API, token, id);
             await loadTrades({ force: true });
             return true;
         } catch (e) {
@@ -1419,26 +1386,13 @@ export default function App() {
         }
 
         try {
-            const res = await fetch(`${API}/trades`, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    Authorization: `Bearer ${token}`,
-                },
-                body: JSON.stringify({
-                    symbol,
-                    direction,
-                    entryPrice: entryPriceNumber,
-                    stopLossPrice: stopLossNumber,
-                    takeProfitPrice: takeProfitNumber,
-                }),
+            await createTradeApi(API, token, {
+                symbol,
+                direction,
+                entryPrice: entryPriceNumber,
+                stopLossPrice: stopLossNumber,
+                takeProfitPrice: takeProfitNumber,
             });
-
-            if (!res.ok) {
-                const txt = await res.text();
-                throw new Error(`Create trade failed (${res.status}): ${txt}`);
-            }
-
             setEntryPrice("");
             setStopLossPrice("");
             setTakeProfitPrice("");
