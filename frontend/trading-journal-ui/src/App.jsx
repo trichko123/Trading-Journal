@@ -16,24 +16,12 @@ import {
 import { normalizeEmail, tryExtractEmailFromIdToken } from "./shared/lib/authToken";
 import { formatCalcNumber, formatCalcInteger, formatCalcPrice } from "./features/risk/utils/riskFormat";
 import {
-    computeStrategyOutcomeR,
     isNetPnlPresent,
     getRealizedRIfPresent,
-    getOutcomeRForMode,
     formatOutcome as formatOutcomeUtil,
     getOutcomeClass as getOutcomeClassUtil,
 } from "./features/stats/utils/outcomes";
-import {
-    buildLedgerEvents,
-    buildStrategyLedger,
-    buildRealizedLedger,
-} from "./features/stats/engine/ledger";
-import { buildRealizedCoverage, buildSummaryStats } from "./features/stats/engine/summaryStats";
-import {
-    buildMoneyMetrics,
-    buildCashflowNet,
-    buildPeriodBalanceRange,
-} from "./features/stats/engine/moneyMetrics";
+import useStatsEngine from "./features/stats/hooks/useStatsEngine";
 import TradeDetailsPanelLeft from "./features/trades/components/TradeDetailsPanelLeft";
 import TradeDetailsPanelRight from "./features/attachments/components/TradeDetailsPanelRight";
 import HeaderBar from "./app/layout/HeaderBar";
@@ -1353,70 +1341,26 @@ export default function App() {
         return Array.from(unique).sort();
     }, [trades]);
 
-    const ledgerEvents = useMemo(
-        () => buildLedgerEvents({ trades, cashflows }),
-        [trades, cashflows],
-    );
-
-    const strategyLedger = useMemo(
-        () => buildStrategyLedger({ accountSettings, ledgerEvents }),
-        [accountSettings, ledgerEvents],
-    );
-
-    const realizedLedger = useMemo(
-        () => buildRealizedLedger({ accountSettings, ledgerEvents }),
-        [accountSettings, ledgerEvents],
-    );
-
-    const activeLedger = statsMode === "realized" ? realizedLedger : strategyLedger;
-
-    const summaryStats = useMemo(
-        () => buildSummaryStats({
-            trades: filteredTrades,
-            statsMode,
-            realizedLedgerByTrade: realizedLedger?.byTrade,
-            getOutcomeRForMode,
-        }),
-        [filteredTrades, statsMode, realizedLedger, getOutcomeRForMode],
-    );
-
-    const realizedCoverage = useMemo(
-        () => buildRealizedCoverage({ trades: filteredTrades }),
-        [filteredTrades],
-    );
-
-    const moneyMetrics = useMemo(
-        () => buildMoneyMetrics({
-            trades: filteredTrades,
-            activeLedger,
-            statsMode,
-            realizedLedgerByTrade: realizedLedger?.byTrade,
-            getOutcomeRForMode,
-        }),
-        [filteredTrades, activeLedger, statsMode, realizedLedger, getOutcomeRForMode],
-    );
-
-    const cashflowNet = useMemo(
-        () => buildCashflowNet({
-            cashflows,
-            datePreset,
-            fromDate,
-            toDate,
-            matchesDatePreset,
-        }),
-        [cashflows, datePreset, fromDate, toDate, matchesDatePreset],
-    );
-
-    const periodBalanceRange = useMemo(
-        () => buildPeriodBalanceRange({
-            trades: filteredTrades,
-            activeLedger,
-            datePreset,
-            fromDate,
-            toDate,
-        }),
-        [activeLedger, filteredTrades, datePreset, fromDate, toDate],
-    );
+    const {
+        strategyLedger,
+        realizedLedger,
+        activeLedger,
+        summaryStats,
+        realizedCoverage,
+        cashflowNet,
+        periodBalanceRange,
+        moneyMetrics,
+    } = useStatsEngine({
+        trades,
+        filteredTrades,
+        cashflows,
+        accountSettings,
+        statsMode,
+        datePreset,
+        fromDate,
+        toDate,
+        matchesDatePreset,
+    });
 
     const selectedTradeMoney = useMemo(() => {
         if (!activeLedger?.byTrade || !selectedTradeForDetails?.id) return null;

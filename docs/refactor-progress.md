@@ -156,3 +156,6 @@ Moved pure utilities from `frontend/trading-journal-ui/src/App.jsx` into:
 
 ## Phase 5.6c: money metrics engine extracted
 - frontend/trading-journal-ui/src/features/stats/engine/moneyMetrics.js
+
+## Phase 5.6d: useStatsEngine hook extracted (composes ledger + stats + money)
+- frontend/trading-journal-ui/src/features/stats/hooks/useStatsEngine.js
