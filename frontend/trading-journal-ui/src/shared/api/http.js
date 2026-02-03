@@ -49,3 +49,23 @@ export async function apiPatch(url, token, body) {
 export async function apiDelete(url, token) {
     return apiRequest("DELETE", url, token);
 }
+
+export async function apiPostForm(url, token, formData) {
+    const headers = {};
+    if (token) {
+        headers.Authorization = `Bearer ${token}`;
+    }
+    const res = await fetch(url, {
+        method: "POST",
+        headers,
+        body: formData,
+    });
+    if (!res.ok) {
+        const text = await res.text();
+        const error = new Error(`Request failed (${res.status}): ${text}`);
+        error.status = res.status;
+        error.bodyText = text;
+        throw error;
+    }
+    return parseJsonSafe(res);
+}

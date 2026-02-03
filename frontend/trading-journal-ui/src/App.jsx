@@ -53,6 +53,11 @@ import {
     updateCashflow as updateCashflowApi,
     deleteCashflow as deleteCashflowApi,
 } from "./features/cashflows/api/cashflowsApi";
+import {
+    uploadTradeAttachment,
+    updateAttachment as updateAttachmentApi,
+    deleteAttachment as deleteAttachmentApi,
+} from "./features/attachments/api/attachmentsApi";
 import DeleteTradeModal from "./features/trades/components/DeleteTradeModal";
 import ReviewModal from "./features/trades/components/ReviewModal";
 import AttachmentLightbox from "./features/attachments/components/AttachmentLightbox";
@@ -885,16 +890,7 @@ export default function App() {
             const form = new FormData();
             form.append("section", attachSection);
             form.append("file", attachFile);
-            const res = await fetch(`${API}/trades/${attachTradeId}/attachments`, {
-                method: "POST",
-                headers: { Authorization: `Bearer ${token}` },
-                body: form,
-            });
-            if (!res.ok) {
-                const txt = await res.text();
-                throw new Error(`Upload failed (${res.status}): ${txt}`);
-            }
-            const createdRaw = await res.json();
+            const createdRaw = await uploadTradeAttachment(API, token, attachTradeId, form);
             const created = {
                 ...createdRaw,
                 imageUrl: createdRaw.imageUrl?.startsWith("/")
@@ -922,19 +918,7 @@ export default function App() {
     async function updateAttachmentTimeframe(attachmentId, timeframe) {
         if (!attachmentId) return;
         try {
-            const res = await fetch(`${API}/attachments/${attachmentId}`, {
-                method: "PATCH",
-                headers: {
-                    "Content-Type": "application/json",
-                    Authorization: `Bearer ${token}`,
-                },
-                body: JSON.stringify({ timeframe }),
-            });
-            if (!res.ok) {
-                const txt = await res.text();
-                throw new Error(`Update attachment failed (${res.status}): ${txt}`);
-            }
-            const updatedRaw = await res.json();
+            const updatedRaw = await updateAttachmentApi(API, token, attachmentId, { timeframe });
             const updated = {
                 ...updatedRaw,
                 imageUrl: updatedRaw.imageUrl?.startsWith("/")
@@ -960,14 +944,7 @@ export default function App() {
     async function removeAttachment(attachment) {
         if (!attachment?.id) return;
         try {
-            const res = await fetch(`${API}/attachments/${attachment.id}`, {
-                method: "DELETE",
-                headers: { Authorization: `Bearer ${token}` },
-            });
-            if (!res.ok) {
-                const txt = await res.text();
-                throw new Error(`Delete attachment failed (${res.status}): ${txt}`);
-            }
+            await deleteAttachmentApi(API, token, attachment.id);
             setAttachmentsBySection((prev) => {
                 const next = {
                     PREPARATION: [...(prev.PREPARATION || [])],

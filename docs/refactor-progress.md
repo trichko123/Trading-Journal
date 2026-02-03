@@ -143,3 +143,7 @@ Moved pure utilities from `frontend/trading-journal-ui/src/App.jsx` into:
 
 ## Phase 5.4: cashflowsApi migrated GET/POST/PUT/DELETE
 - frontend/trading-journal-ui/src/features/cashflows/api/cashflowsApi.js
+
+## Phase 5.5: attachmentsApi migrated GET/POST/PATCH/DELETE
+- frontend/trading-journal-ui/src/features/attachments/api/attachmentsApi.js
+- frontend/trading-journal-ui/src/shared/api/http.js
