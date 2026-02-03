@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { getAttachmentsForTrade } from "../api/attachmentsApi";
 
 const EMPTY_SECTIONS = { PREPARATION: [], ENTRY: [], EXIT: [] };
 
@@ -25,14 +26,7 @@ export default function useAttachments({
         setAttachmentsLoading(true);
         setAttachmentsError("");
         try {
-            const res = await fetch(`${apiBase}/trades/${tradeId}/attachments`, {
-                headers: { Authorization: `Bearer ${token}` },
-            });
-            if (!res.ok) {
-                const txt = await res.text();
-                throw new Error(`Load attachments failed (${res.status}): ${txt}`);
-            }
-            const data = await res.json();
+            const data = await getAttachmentsForTrade(apiBase, token, tradeId);
             const next = { PREPARATION: [], ENTRY: [], EXIT: [] };
             data.forEach((item) => {
                 if (!item?.section) return;

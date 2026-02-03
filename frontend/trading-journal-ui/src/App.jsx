@@ -16,13 +16,12 @@ import {
 import { normalizeEmail, tryExtractEmailFromIdToken } from "./shared/lib/authToken";
 import { formatCalcNumber, formatCalcInteger, formatCalcPrice } from "./features/risk/utils/riskFormat";
 import {
-    computeStrategyOutcomeR,
     isNetPnlPresent,
     getRealizedRIfPresent,
-    getOutcomeRForMode,
     formatOutcome as formatOutcomeUtil,
     getOutcomeClass as getOutcomeClassUtil,
 } from "./features/stats/utils/outcomes";
+import useStatsEngine from "./features/stats/hooks/useStatsEngine";
 import TradeDetailsPanelLeft from "./features/trades/components/TradeDetailsPanelLeft";
 import TradeDetailsPanelRight from "./features/attachments/components/TradeDetailsPanelRight";
 import HeaderBar from "./app/layout/HeaderBar";
@@ -36,6 +35,28 @@ import useTradesFilters from "./features/trades/hooks/useTradesFilters";
 import useUIState from "./app/hooks/useUIState";
 import useAttachments from "./features/attachments/hooks/useAttachments";
 import useRiskCalculatorState from "./features/risk/hooks/useRiskCalculatorState";
+import {
+    getTrades,
+    createTrade as createTradeApi,
+    updateTrade as updateTradeApi,
+    deleteTrade as deleteTradeApi,
+    submitTradeReview as submitTradeReviewApi,
+} from "./features/trades/api/tradesApi";
+import {
+    getAccountSettings as getAccountSettingsApi,
+    updateAccountSettings as updateAccountSettingsApi,
+} from "./features/account/api/accountApi";
+import {
+    getCashflows as getCashflowsApi,
+    createCashflow as createCashflowApi,
+    updateCashflow as updateCashflowApi,
+    deleteCashflow as deleteCashflowApi,
+} from "./features/cashflows/api/cashflowsApi";
+import {
+    uploadTradeAttachment,
+    updateAttachment as updateAttachmentApi,
+    deleteAttachment as deleteAttachmentApi,
+} from "./features/attachments/api/attachmentsApi";
 import DeleteTradeModal from "./features/trades/components/DeleteTradeModal";
 import ReviewModal from "./features/trades/components/ReviewModal";
 import AttachmentLightbox from "./features/attachments/components/AttachmentLightbox";
@@ -546,16 +567,7 @@ export default function App() {
         setError("");
         setIsLoading(true);
         try {
-            const res = await fetch(`${API}/trades`, {
-                headers: { Authorization: `Bearer ${token}` },
-            });
-
-            if (!res.ok) {
-                const txt = await res.text();
-                throw new Error(`Load trades failed (${res.status}): ${txt}`);
-            }
-
-            const data = await res.json();
+            const data = await getTrades(API, token);
             setTrades(data);
         } catch (err) {
             setError(String(err));
@@ -568,20 +580,13 @@ export default function App() {
         if (!token) return;
         setAccountSettingsError("");
         try {
-            const res = await fetch(`${API}/account-settings`, {
-                headers: { Authorization: `Bearer ${token}` },
-            });
-            if (res.status === 404) {
+            const data = await getAccountSettingsApi(API, token);
+            setAccountSettings(data);
+        } catch (err) {
+            if (err?.status === 404) {
                 setAccountSettings(null);
                 return;
             }
-            if (!res.ok) {
-                const txt = await res.text();
-                throw new Error(`Load account settings failed (${res.status}): ${txt}`);
-            }
-            const data = await res.json();
-            setAccountSettings(data);
-        } catch (err) {
             setAccountSettingsError(String(err));
         }
     }
@@ -590,14 +595,7 @@ export default function App() {
         if (!token) return;
         setCashflowError("");
         try {
-            const res = await fetch(`${API}/cashflows`, {
-                headers: { Authorization: `Bearer ${token}` },
-            });
-            if (!res.ok) {
-                const txt = await res.text();
-                throw new Error(`Load cashflows failed (${res.status}): ${txt}`);
-            }
-            const data = await res.json();
+            const data = await getCashflowsApi(API, token);
             setCashflows(Array.isArray(data) ? data : []);
         } catch (err) {
             setCashflowError(String(err).replace(/^Error:\s*/, ""));
@@ -695,23 +693,11 @@ export default function App() {
         }
         setIsAccountSettingsSaving(true);
         try {
-            const res = await fetch(`${API}/account-settings`, {
-                method: "PUT",
-                headers: {
-                    "Content-Type": "application/json",
-                    Authorization: `Bearer ${token}`,
-                },
-                body: JSON.stringify({
-                    startingBalance,
-                    riskPercent,
-                    currency: accountSettingsCurrency || null,
-                }),
+            const data = await updateAccountSettingsApi(API, token, {
+                startingBalance,
+                riskPercent,
+                currency: accountSettingsCurrency || null,
             });
-            if (!res.ok) {
-                const txt = await res.text();
-                throw new Error(`Save account settings failed (${res.status}): ${txt}`);
-            }
-            const data = await res.json();
             setAccountSettings(data);
             setIsAccountSettingsOpen(false);
         } catch (err) {
@@ -772,23 +758,12 @@ export default function App() {
         }
         setIsCashflowSaving(true);
         try {
-            const res = await fetch(`${API}/cashflows`, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    Authorization: `Bearer ${token}`,
-                },
-                body: JSON.stringify({
-                    type: cashflowType,
-                    amountMoney: amountNumber,
-                    occurredAt: occurredAtIso,
-                    note: cashflowNote?.trim() ? cashflowNote.trim() : null,
-                }),
+            await createCashflowApi(API, token, {
+                type: cashflowType,
+                amountMoney: amountNumber,
+                occurredAt: occurredAtIso,
+                note: cashflowNote?.trim() ? cashflowNote.trim() : null,
             });
-            if (!res.ok) {
-                const txt = await res.text();
-                throw new Error(`Create cashflow failed (${res.status}): ${txt}`);
-            }
             setCashflowAmount("");
             setCashflowNote("");
             setCashflowOccurredAt(toDateTimeLocalValue(new Date()));
@@ -818,23 +793,12 @@ export default function App() {
             return;
         }
         try {
-            const res = await fetch(`${API}/cashflows/${cashflowEditId}`, {
-                method: "PUT",
-                headers: {
-                    "Content-Type": "application/json",
-                    Authorization: `Bearer ${token}`,
-                },
-                body: JSON.stringify({
-                    type: cashflowEditType,
-                    amountMoney: amountNumber,
-                    occurredAt: occurredAtIso,
-                    note: cashflowEditNote?.trim() ? cashflowEditNote.trim() : null,
-                }),
+            await updateCashflowApi(API, token, cashflowEditId, {
+                type: cashflowEditType,
+                amountMoney: amountNumber,
+                occurredAt: occurredAtIso,
+                note: cashflowEditNote?.trim() ? cashflowEditNote.trim() : null,
             });
-            if (!res.ok) {
-                const txt = await res.text();
-                throw new Error(`Update cashflow failed (${res.status}): ${txt}`);
-            }
             closeCashflowEditModal();
             await loadCashflows();
         } catch (err) {
@@ -845,14 +809,7 @@ export default function App() {
     async function deleteCashflow(id) {
         if (!id) return;
         try {
-            const res = await fetch(`${API}/cashflows/${id}`, {
-                method: "DELETE",
-                headers: { Authorization: `Bearer ${token}` },
-            });
-            if (!res.ok) {
-                const txt = await res.text();
-                throw new Error(`Delete cashflow failed (${res.status}): ${txt}`);
-            }
+            await deleteCashflowApi(API, token, id);
             await loadCashflows();
         } catch (err) {
             setCashflowError(String(err).replace(/^Error:\s*/, ""));
@@ -932,16 +889,7 @@ export default function App() {
             const form = new FormData();
             form.append("section", attachSection);
             form.append("file", attachFile);
-            const res = await fetch(`${API}/trades/${attachTradeId}/attachments`, {
-                method: "POST",
-                headers: { Authorization: `Bearer ${token}` },
-                body: form,
-            });
-            if (!res.ok) {
-                const txt = await res.text();
-                throw new Error(`Upload failed (${res.status}): ${txt}`);
-            }
-            const createdRaw = await res.json();
+            const createdRaw = await uploadTradeAttachment(API, token, attachTradeId, form);
             const created = {
                 ...createdRaw,
                 imageUrl: createdRaw.imageUrl?.startsWith("/")
@@ -969,19 +917,7 @@ export default function App() {
     async function updateAttachmentTimeframe(attachmentId, timeframe) {
         if (!attachmentId) return;
         try {
-            const res = await fetch(`${API}/attachments/${attachmentId}`, {
-                method: "PATCH",
-                headers: {
-                    "Content-Type": "application/json",
-                    Authorization: `Bearer ${token}`,
-                },
-                body: JSON.stringify({ timeframe }),
-            });
-            if (!res.ok) {
-                const txt = await res.text();
-                throw new Error(`Update attachment failed (${res.status}): ${txt}`);
-            }
-            const updatedRaw = await res.json();
+            const updatedRaw = await updateAttachmentApi(API, token, attachmentId, { timeframe });
             const updated = {
                 ...updatedRaw,
                 imageUrl: updatedRaw.imageUrl?.startsWith("/")
@@ -1007,14 +943,7 @@ export default function App() {
     async function removeAttachment(attachment) {
         if (!attachment?.id) return;
         try {
-            const res = await fetch(`${API}/attachments/${attachment.id}`, {
-                method: "DELETE",
-                headers: { Authorization: `Bearer ${token}` },
-            });
-            if (!res.ok) {
-                const txt = await res.text();
-                throw new Error(`Delete attachment failed (${res.status}): ${txt}`);
-            }
+            await deleteAttachmentApi(API, token, attachment.id);
             setAttachmentsBySection((prev) => {
                 const next = {
                     PREPARATION: [...(prev.PREPARATION || [])],
@@ -1064,21 +993,7 @@ export default function App() {
     }
 
     async function updateTradeRequest(id, payload) {
-        const res = await fetch(`${API}/trades/${id}`, {
-            method: "PUT",
-            headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify(payload),
-        });
-
-        if (!res.ok) {
-            const txt = await res.text();
-            throw new Error(`Update trade failed (${res.status}): ${txt}`);
-        }
-
-        return res.json();
+        return updateTradeApi(API, token, id, payload);
     }
 
     async function closeTradeInline(trade, {
@@ -1189,21 +1104,7 @@ export default function App() {
     }
 
     async function updateTradeReviewRequest(id, payload) {
-        const res = await fetch(`${API}/trades/${id}/review`, {
-            method: "PATCH",
-            headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify(payload),
-        });
-
-        if (!res.ok) {
-            const txt = await res.text();
-            throw new Error(`Update review failed (${res.status}): ${txt}`);
-        }
-
-        return res.json();
+        return submitTradeReviewApi(API, token, id, payload);
     }
 
     async function submitReview() {
@@ -1386,18 +1287,7 @@ export default function App() {
     async function deleteTrade(id) {
         setError("");
         try {
-            const res = await fetch(`${API}/trades/${id}`, {
-                method: "DELETE",
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                },
-            });
-
-            if (!res.ok) {
-                const txt = await res.text();
-                throw new Error(`Delete trade failed (${res.status}): ${txt}`);
-            }
-
+            await deleteTradeApi(API, token, id);
             await loadTrades({ force: true });
             return true;
         } catch (e) {
@@ -1427,26 +1317,13 @@ export default function App() {
         }
 
         try {
-            const res = await fetch(`${API}/trades`, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    Authorization: `Bearer ${token}`,
-                },
-                body: JSON.stringify({
-                    symbol,
-                    direction,
-                    entryPrice: entryPriceNumber,
-                    stopLossPrice: stopLossNumber,
-                    takeProfitPrice: takeProfitNumber,
-                }),
+            await createTradeApi(API, token, {
+                symbol,
+                direction,
+                entryPrice: entryPriceNumber,
+                stopLossPrice: stopLossNumber,
+                takeProfitPrice: takeProfitNumber,
             });
-
-            if (!res.ok) {
-                const txt = await res.text();
-                throw new Error(`Create trade failed (${res.status}): ${txt}`);
-            }
-
             setEntryPrice("");
             setStopLossPrice("");
             setTakeProfitPrice("");
@@ -1464,314 +1341,26 @@ export default function App() {
         return Array.from(unique).sort();
     }, [trades]);
 
-    const ledgerEvents = useMemo(() => {
-        const events = [];
-        cashflows.forEach((cashflow) => {
-            if (!cashflow?.occurredAt) return;
-            const ts = parseCreatedAt(cashflow.occurredAt);
-            if (!ts) return;
-            const amount = Number(cashflow.amountMoney);
-            if (!Number.isFinite(amount)) return;
-            events.push({
-                kind: "cashflow",
-                ts: ts.getTime(),
-                id: cashflow.id ?? 0,
-                type: cashflow.type,
-                amount,
-            });
-        });
-        trades.forEach((trade) => {
-            if (!trade?.closedAt) return;
-            const rValue = computeStrategyOutcomeR(trade);
-            if (!Number.isFinite(rValue)) return;
-            const ts = parseCreatedAt(trade.closedAt);
-            if (!ts) return;
-            events.push({
-                kind: "trade",
-                ts: ts.getTime(),
-                id: trade.id ?? 0,
-                trade,
-                rValue,
-            });
-        });
-        return events.sort((a, b) => {
-            if (a.ts !== b.ts) return a.ts - b.ts;
-            if (a.kind !== b.kind) return a.kind === "cashflow" ? -1 : 1;
-            return (a.id ?? 0) - (b.id ?? 0);
-        });
-    }, [cashflows, trades]);
-
-    const strategyLedger = useMemo(() => {
-        if (!accountSettings) return null;
-        const startingBalance = Number(accountSettings.startingBalance);
-        const riskPercent = Number(accountSettings.riskPercent);
-        if (!Number.isFinite(startingBalance) || startingBalance <= 0) return null;
-        if (!Number.isFinite(riskPercent) || riskPercent <= 0) return null;
-        const riskFraction = riskPercent / 100;
-        const byTrade = new Map();
-        const orderedTrades = [];
-        let balance = startingBalance;
-        let lastBalanceAfter = null;
-        ledgerEvents.forEach((event) => {
-            if (event.kind === "cashflow") {
-                const normalized = String(event.type || "").toUpperCase();
-                const amount = Math.abs(event.amount);
-                if (!Number.isFinite(amount)) return;
-                balance = normalized === "WITHDRAWAL" ? balance - amount : balance + amount;
-                return;
-            }
-            const trade = event.trade;
-            const rValue = event.rValue;
-            const balanceBefore = balance;
-            const riskAmount = balanceBefore > 0 ? balanceBefore * riskFraction : 0;
-            const pnlMoney = rValue * riskAmount;
-            const balanceAfter = balanceBefore + pnlMoney;
-            byTrade.set(trade.id, {
-                balanceBefore,
-                riskAmount,
-                pnlMoney,
-                balanceAfter,
-            });
-            balance = balanceAfter;
-            lastBalanceAfter = balanceAfter;
-            orderedTrades.push(trade);
-        });
-        return {
-            startingBalance,
-            endingBalance: balance,
-            lastBalanceAfter,
-            hasClosedTrades: orderedTrades.length > 0,
-            byTrade,
-            orderedTrades,
-            riskFraction,
-        };
-    }, [accountSettings, ledgerEvents]);
-
-    const realizedLedger = useMemo(() => {
-        if (!accountSettings) return null;
-        const startingBalance = Number(accountSettings.startingBalance);
-        const riskPercent = Number(accountSettings.riskPercent);
-        if (!Number.isFinite(startingBalance) || startingBalance <= 0) return null;
-        if (!Number.isFinite(riskPercent) || riskPercent <= 0) return null;
-        const riskFraction = riskPercent / 100;
-        const byTrade = new Map();
-        const orderedTrades = [];
-        let balance = startingBalance;
-        let lastBalanceAfter = null;
-        ledgerEvents.forEach((event) => {
-            if (event.kind === "cashflow") {
-                const normalized = String(event.type || "").toUpperCase();
-                const amount = Math.abs(event.amount);
-                if (!Number.isFinite(amount)) return;
-                balance = normalized === "WITHDRAWAL" ? balance - amount : balance + amount;
-                return;
-            }
-            const trade = event.trade;
-            const rValue = event.rValue;
-            const balanceBefore = balance;
-            const riskAmount = balanceBefore > 0 ? balanceBefore * riskFraction : 0;
-            const hasNetPnl = isNetPnlPresent(trade);
-            const pnlMoney = hasNetPnl ? Number(trade.netPnlMoney) : rValue * riskAmount;
-            const balanceAfter = balanceBefore + pnlMoney;
-            byTrade.set(trade.id, {
-                balanceBefore,
-                riskAmount,
-                pnlMoney,
-                balanceAfter,
-                isRealizedCovered: hasNetPnl,
-            });
-            balance = balanceAfter;
-            lastBalanceAfter = balanceAfter;
-            orderedTrades.push(trade);
-        });
-        return {
-            startingBalance,
-            endingBalance: balance,
-            lastBalanceAfter,
-            hasClosedTrades: orderedTrades.length > 0,
-            byTrade,
-            orderedTrades,
-            riskFraction,
-        };
-    }, [accountSettings, ledgerEvents]);
-
-    const activeLedger = statsMode === "realized" ? realizedLedger : strategyLedger;
-
-    const summaryStats = useMemo(() => {
-        const outcomes = [];
-        let excluded = 0;
-        const confidences = [];
-        let winCount = 0;
-        let lossCount = 0;
-        let breakevenCount = 0;
-        const epsilon = 1e-9;
-        filteredTrades.forEach((trade) => {
-            const rValue = getOutcomeRForMode(trade, { statsMode, realizedLedgerByTrade: realizedLedger?.byTrade });
-            if (Number.isFinite(rValue)) {
-                outcomes.push(rValue);
-                if (trade?.closedAt) {
-                    if (Math.abs(rValue) < epsilon) {
-                        breakevenCount += 1;
-                    } else if (rValue > 0) {
-                        winCount += 1;
-                    } else {
-                        lossCount += 1;
-                    }
-                }
-            } else {
-                excluded += 1;
-            }
-            if (trade?.closedAt && Number.isFinite(trade.confidence)) {
-                confidences.push(trade.confidence);
-            }
-        });
-        const numericCount = outcomes.length;
-        const sum = outcomes.reduce((acc, value) => acc + value, 0);
-        const average = numericCount ? sum / numericCount : null;
-        const winPct = numericCount ? (winCount / numericCount) * 100 : null;
-        const confCount = confidences.length;
-        const confAverage = confCount
-            ? confidences.reduce((acc, value) => acc + value, 0) / confCount
-            : null;
-        return {
-            tradeCount: filteredTrades.length,
-            excluded,
-            numericCount,
-            sum,
-            average,
-            winPct,
-            confCount,
-            confAverage,
-            winCount,
-            lossCount,
-            breakevenCount,
-        };
-    }, [filteredTrades, statsMode, realizedLedger]);
-
-    const realizedCoverage = useMemo(() => {
-        let total = 0;
-        let covered = 0;
-        filteredTrades.forEach((trade) => {
-            if (!trade?.closedAt) return;
-            const strategyR = computeStrategyOutcomeR(trade);
-            if (!Number.isFinite(strategyR)) return;
-            total += 1;
-            if (isNetPnlPresent(trade)) {
-                covered += 1;
-            }
-        });
-        return { total, covered };
-    }, [filteredTrades]);
-
-    const moneyMetrics = useMemo(() => {
-        if (!activeLedger?.byTrade) return null;
-        const periodTrades = filteredTrades
-            .filter((trade) => activeLedger.byTrade.has(trade.id))
-            .slice()
-            .sort((a, b) => {
-                const aTime = new Date(a.closedAt).getTime();
-                const bTime = new Date(b.closedAt).getTime();
-                if (aTime !== bTime) return aTime - bTime;
-                return (a.id ?? 0) - (b.id ?? 0);
-            });
-        if (periodTrades.length === 0) {
-            return {
-                tradeCount: 0,
-                totalPnl: null,
-                returnPct: null,
-                maxDrawdownPct: null,
-                lossStreakR: null,
-            };
-        }
-        const firstEntry = activeLedger.byTrade.get(periodTrades[0].id);
-        if (!firstEntry || !Number.isFinite(firstEntry.balanceBefore) || firstEntry.balanceBefore <= 0) {
-            return {
-                tradeCount: 0,
-                totalPnl: null,
-                returnPct: null,
-                maxDrawdownPct: null,
-                lossStreakR: null,
-            };
-        }
-        const startEquity = firstEntry.balanceBefore;
-        let equity = startEquity;
-        let peakEquity = startEquity;
-        let maxDrawdownPct = 0;
-        let totalPnl = 0;
-        let currentLossRunR = 0;
-        let worstLossRunR = 0;
-        periodTrades.forEach((trade) => {
-            const entry = activeLedger.byTrade.get(trade.id);
-            if (!entry || !Number.isFinite(entry.pnlMoney)) return;
-            const rValue = getOutcomeRForMode(trade, { statsMode, realizedLedgerByTrade: realizedLedger?.byTrade });
-            if (Number.isFinite(rValue)) {
-                if (rValue < 0) {
-                    currentLossRunR += rValue;
-                    worstLossRunR = Math.min(worstLossRunR, currentLossRunR);
-                } else {
-                    currentLossRunR = 0;
-                }
-            }
-            totalPnl += entry.pnlMoney;
-            equity += entry.pnlMoney;
-            peakEquity = Math.max(peakEquity, equity);
-            const drawdownPct = peakEquity > 0 ? ((equity - peakEquity) / peakEquity) * 100 : 0;
-            if (drawdownPct < maxDrawdownPct) {
-                maxDrawdownPct = drawdownPct;
-            }
-        });
-        const returnPct = startEquity > 0 ? (totalPnl / startEquity) * 100 : null;
-        return {
-            tradeCount: periodTrades.length,
-            totalPnl,
-            returnPct,
-            maxDrawdownPct,
-            lossStreakR: worstLossRunR,
-        };
-    }, [filteredTrades, activeLedger, statsMode, realizedLedger]);
-
-    const cashflowNet = useMemo(() => {
-        if (!cashflows.length) return 0;
-        const isAllTime = datePreset === "all" && !fromDate && !toDate;
-        return cashflows.reduce((sum, cashflow) => {
-            if (!cashflow) return sum;
-            if (!isAllTime && !matchesDatePreset(cashflow.occurredAt, datePreset, fromDate, toDate)) {
-                return sum;
-            }
-            const amount = Number(cashflow.amountMoney);
-            if (!Number.isFinite(amount)) return sum;
-            const normalizedType = String(cashflow.type || "").toUpperCase();
-            return normalizedType === "WITHDRAWAL" ? sum - amount : sum + amount;
-        }, 0);
-    }, [cashflows, datePreset, fromDate, toDate]);
-
-    const periodBalanceRange = useMemo(() => {
-        if (!activeLedger?.byTrade) return null;
-        const isAllTime = datePreset === "all" && !fromDate && !toDate;
-        if (isAllTime) {
-            return {
-                start: activeLedger.startingBalance,
-                end: activeLedger.endingBalance,
-            };
-        }
-        const periodTrades = filteredTrades
-            .filter((trade) => activeLedger.byTrade.has(trade.id))
-            .slice()
-            .sort((a, b) => {
-                const aTime = new Date(a.closedAt).getTime();
-                const bTime = new Date(b.closedAt).getTime();
-                if (aTime !== bTime) return aTime - bTime;
-                return (a.id ?? 0) - (b.id ?? 0);
-            });
-        if (periodTrades.length === 0) return { start: null, end: null };
-        const first = activeLedger.byTrade.get(periodTrades[0].id);
-        const last = activeLedger.byTrade.get(periodTrades[periodTrades.length - 1].id);
-        if (!first || !last) return { start: null, end: null };
-        return {
-            start: first.balanceBefore,
-            end: last.balanceAfter,
-        };
-    }, [activeLedger, filteredTrades, datePreset, fromDate, toDate]);
+    const {
+        strategyLedger,
+        realizedLedger,
+        activeLedger,
+        summaryStats,
+        realizedCoverage,
+        cashflowNet,
+        periodBalanceRange,
+        moneyMetrics,
+    } = useStatsEngine({
+        trades,
+        filteredTrades,
+        cashflows,
+        accountSettings,
+        statsMode,
+        datePreset,
+        fromDate,
+        toDate,
+        matchesDatePreset,
+    });
 
     const selectedTradeMoney = useMemo(() => {
         if (!activeLedger?.byTrade || !selectedTradeForDetails?.id) return null;

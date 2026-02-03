@@ -129,3 +129,33 @@ Moved pure utilities from `frontend/trading-journal-ui/src/App.jsx` into:
 
 ## Phase 4.5: useRiskCalculatorState hook extracted
 - frontend/trading-journal-ui/src/features/risk/hooks/useRiskCalculatorState.js
+
+## Phase 5.1: shared http client + tradesApi.getTrades migrated
+- frontend/trading-journal-ui/src/shared/api/http.js
+- frontend/trading-journal-ui/src/features/trades/api/tradesApi.js
+
+## Phase 5.2: tradesApi migrated POST/PUT/DELETE/PATCH
+- frontend/trading-journal-ui/src/features/trades/api/tradesApi.js
+- frontend/trading-journal-ui/src/shared/api/http.js
+
+## Phase 5.3: accountApi migrated GET/PUT
+- frontend/trading-journal-ui/src/features/account/api/accountApi.js
+
+## Phase 5.4: cashflowsApi migrated GET/POST/PUT/DELETE
+- frontend/trading-journal-ui/src/features/cashflows/api/cashflowsApi.js
+
+## Phase 5.5: attachmentsApi migrated GET/POST/PATCH/DELETE
+- frontend/trading-journal-ui/src/features/attachments/api/attachmentsApi.js
+- frontend/trading-journal-ui/src/shared/api/http.js
+
+## Phase 5.6a: stats ledger engine extracted
+- frontend/trading-journal-ui/src/features/stats/engine/ledger.js
+
+## Phase 5.6b: summary stats engine extracted
+- frontend/trading-journal-ui/src/features/stats/engine/summaryStats.js
+
+## Phase 5.6c: money metrics engine extracted
+- frontend/trading-journal-ui/src/features/stats/engine/moneyMetrics.js
+
+## Phase 5.6d: useStatsEngine hook extracted (composes ledger + stats + money)
+- frontend/trading-journal-ui/src/features/stats/hooks/useStatsEngine.js
