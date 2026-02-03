@@ -36,6 +36,7 @@ import useTradesFilters from "./features/trades/hooks/useTradesFilters";
 import useUIState from "./app/hooks/useUIState";
 import useAttachments from "./features/attachments/hooks/useAttachments";
 import useRiskCalculatorState from "./features/risk/hooks/useRiskCalculatorState";
+import { getTrades } from "./features/trades/api/tradesApi";
 import DeleteTradeModal from "./features/trades/components/DeleteTradeModal";
 import ReviewModal from "./features/trades/components/ReviewModal";
 import AttachmentLightbox from "./features/attachments/components/AttachmentLightbox";
@@ -546,16 +547,7 @@ export default function App() {
         setError("");
         setIsLoading(true);
         try {
-            const res = await fetch(`${API}/trades`, {
-                headers: { Authorization: `Bearer ${token}` },
-            });
-
-            if (!res.ok) {
-                const txt = await res.text();
-                throw new Error(`Load trades failed (${res.status}): ${txt}`);
-            }
-
-            const data = await res.json();
+            const data = await getTrades(API, token);
             setTrades(data);
         } catch (err) {
             setError(String(err));

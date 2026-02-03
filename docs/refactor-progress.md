@@ -129,3 +129,7 @@ Moved pure utilities from `frontend/trading-journal-ui/src/App.jsx` into:
 
 ## Phase 4.5: useRiskCalculatorState hook extracted
 - frontend/trading-journal-ui/src/features/risk/hooks/useRiskCalculatorState.js
+
+## Phase 5.1: shared http client + tradesApi.getTrades migrated
+- frontend/trading-journal-ui/src/shared/api/http.js
+- frontend/trading-journal-ui/src/features/trades/api/tradesApi.js
