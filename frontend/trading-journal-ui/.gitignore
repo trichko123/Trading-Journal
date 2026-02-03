@@ -25,3 +25,6 @@ dist-ssr
 
 uploads/
 
+# Env files
+.env
+.env.*
