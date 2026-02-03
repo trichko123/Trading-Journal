@@ -47,6 +47,12 @@ import {
     getAccountSettings as getAccountSettingsApi,
     updateAccountSettings as updateAccountSettingsApi,
 } from "./features/account/api/accountApi";
+import {
+    getCashflows as getCashflowsApi,
+    createCashflow as createCashflowApi,
+    updateCashflow as updateCashflowApi,
+    deleteCashflow as deleteCashflowApi,
+} from "./features/cashflows/api/cashflowsApi";
 import DeleteTradeModal from "./features/trades/components/DeleteTradeModal";
 import ReviewModal from "./features/trades/components/ReviewModal";
 import AttachmentLightbox from "./features/attachments/components/AttachmentLightbox";
@@ -585,14 +591,7 @@ export default function App() {
         if (!token) return;
         setCashflowError("");
         try {
-            const res = await fetch(`${API}/cashflows`, {
-                headers: { Authorization: `Bearer ${token}` },
-            });
-            if (!res.ok) {
-                const txt = await res.text();
-                throw new Error(`Load cashflows failed (${res.status}): ${txt}`);
-            }
-            const data = await res.json();
+            const data = await getCashflowsApi(API, token);
             setCashflows(Array.isArray(data) ? data : []);
         } catch (err) {
             setCashflowError(String(err).replace(/^Error:\s*/, ""));
@@ -755,23 +754,12 @@ export default function App() {
         }
         setIsCashflowSaving(true);
         try {
-            const res = await fetch(`${API}/cashflows`, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    Authorization: `Bearer ${token}`,
-                },
-                body: JSON.stringify({
-                    type: cashflowType,
-                    amountMoney: amountNumber,
-                    occurredAt: occurredAtIso,
-                    note: cashflowNote?.trim() ? cashflowNote.trim() : null,
-                }),
+            await createCashflowApi(API, token, {
+                type: cashflowType,
+                amountMoney: amountNumber,
+                occurredAt: occurredAtIso,
+                note: cashflowNote?.trim() ? cashflowNote.trim() : null,
             });
-            if (!res.ok) {
-                const txt = await res.text();
-                throw new Error(`Create cashflow failed (${res.status}): ${txt}`);
-            }
             setCashflowAmount("");
             setCashflowNote("");
             setCashflowOccurredAt(toDateTimeLocalValue(new Date()));
@@ -801,23 +789,12 @@ export default function App() {
             return;
         }
         try {
-            const res = await fetch(`${API}/cashflows/${cashflowEditId}`, {
-                method: "PUT",
-                headers: {
-                    "Content-Type": "application/json",
-                    Authorization: `Bearer ${token}`,
-                },
-                body: JSON.stringify({
-                    type: cashflowEditType,
-                    amountMoney: amountNumber,
-                    occurredAt: occurredAtIso,
-                    note: cashflowEditNote?.trim() ? cashflowEditNote.trim() : null,
-                }),
+            await updateCashflowApi(API, token, cashflowEditId, {
+                type: cashflowEditType,
+                amountMoney: amountNumber,
+                occurredAt: occurredAtIso,
+                note: cashflowEditNote?.trim() ? cashflowEditNote.trim() : null,
             });
-            if (!res.ok) {
-                const txt = await res.text();
-                throw new Error(`Update cashflow failed (${res.status}): ${txt}`);
-            }
             closeCashflowEditModal();
             await loadCashflows();
         } catch (err) {
@@ -828,14 +805,7 @@ export default function App() {
     async function deleteCashflow(id) {
         if (!id) return;
         try {
-            const res = await fetch(`${API}/cashflows/${id}`, {
-                method: "DELETE",
-                headers: { Authorization: `Bearer ${token}` },
-            });
-            if (!res.ok) {
-                const txt = await res.text();
-                throw new Error(`Delete cashflow failed (${res.status}): ${txt}`);
-            }
+            await deleteCashflowApi(API, token, id);
             await loadCashflows();
         } catch (err) {
             setCashflowError(String(err).replace(/^Error:\s*/, ""));

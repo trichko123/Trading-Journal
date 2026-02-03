@@ -137,3 +137,9 @@ Moved pure utilities from `frontend/trading-journal-ui/src/App.jsx` into:
 ## Phase 5.2: tradesApi migrated POST/PUT/DELETE/PATCH
 - frontend/trading-journal-ui/src/features/trades/api/tradesApi.js
 - frontend/trading-journal-ui/src/shared/api/http.js
+
+## Phase 5.3: accountApi migrated GET/PUT
+- frontend/trading-journal-ui/src/features/account/api/accountApi.js
+
+## Phase 5.4: cashflowsApi migrated GET/POST/PUT/DELETE
+- frontend/trading-journal-ui/src/features/cashflows/api/cashflowsApi.js
