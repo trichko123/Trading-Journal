@@ -43,6 +43,10 @@ import {
     deleteTrade as deleteTradeApi,
     submitTradeReview as submitTradeReviewApi,
 } from "./features/trades/api/tradesApi";
+import {
+    getAccountSettings as getAccountSettingsApi,
+    updateAccountSettings as updateAccountSettingsApi,
+} from "./features/account/api/accountApi";
 import DeleteTradeModal from "./features/trades/components/DeleteTradeModal";
 import ReviewModal from "./features/trades/components/ReviewModal";
 import AttachmentLightbox from "./features/attachments/components/AttachmentLightbox";
@@ -566,20 +570,13 @@ export default function App() {
         if (!token) return;
         setAccountSettingsError("");
         try {
-            const res = await fetch(`${API}/account-settings`, {
-                headers: { Authorization: `Bearer ${token}` },
-            });
-            if (res.status === 404) {
+            const data = await getAccountSettingsApi(API, token);
+            setAccountSettings(data);
+        } catch (err) {
+            if (err?.status === 404) {
                 setAccountSettings(null);
                 return;
             }
-            if (!res.ok) {
-                const txt = await res.text();
-                throw new Error(`Load account settings failed (${res.status}): ${txt}`);
-            }
-            const data = await res.json();
-            setAccountSettings(data);
-        } catch (err) {
             setAccountSettingsError(String(err));
         }
     }
@@ -693,23 +690,11 @@ export default function App() {
         }
         setIsAccountSettingsSaving(true);
         try {
-            const res = await fetch(`${API}/account-settings`, {
-                method: "PUT",
-                headers: {
-                    "Content-Type": "application/json",
-                    Authorization: `Bearer ${token}`,
-                },
-                body: JSON.stringify({
-                    startingBalance,
-                    riskPercent,
-                    currency: accountSettingsCurrency || null,
-                }),
+            const data = await updateAccountSettingsApi(API, token, {
+                startingBalance,
+                riskPercent,
+                currency: accountSettingsCurrency || null,
             });
-            if (!res.ok) {
-                const txt = await res.text();
-                throw new Error(`Save account settings failed (${res.status}): ${txt}`);
-            }
-            const data = await res.json();
             setAccountSettings(data);
             setIsAccountSettingsOpen(false);
         } catch (err) {
