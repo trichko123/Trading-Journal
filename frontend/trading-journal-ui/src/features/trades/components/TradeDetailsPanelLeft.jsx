@@ -3,6 +3,7 @@ import { getPriceStep, formatPriceValue } from "../../../shared/lib/price";
 import { formatMoneyValue, formatMoneyNullable } from "../../../shared/lib/format";
 import DetailRow from "../../../shared/components/DetailRow";
 import { INSTRUMENTS, getDisplayUnit } from "../../../constants/instruments";
+import { getUserMessage } from "../../../shared/api/http";
 
 export default function TradeDetailsPanelLeft({
     trade,
@@ -201,7 +202,7 @@ export default function TradeDetailsPanelLeft({
         setCloseSwap(trade.swapMoney != null ? String(trade.swapMoney) : "");
         setCloseNetPnlMode("net");
         setCloseClosedAt(safeToDateTimeLocalValue(new Date()));
-    }, [open, trade?.id, safeToDateTimeLocalValue]);
+    }, [open, trade, trade?.id, safeToDateTimeLocalValue]);
     useEffect(() => {
         if (isEditing) {
             setIsClosing(false);
@@ -245,7 +246,7 @@ export default function TradeDetailsPanelLeft({
                 lastFocused.focus();
             }
         };
-    }, [isVisible]);
+    }, [isVisible, panelRef]);
     useEffect(() => {
         if (!isVisible || !isMobile) return undefined;
         bodyOverflowRef.current = document.body.style.overflow;
@@ -279,7 +280,7 @@ export default function TradeDetailsPanelLeft({
         };
         document.addEventListener("mousedown", handlePointerDown);
         return () => document.removeEventListener("mousedown", handlePointerDown);
-    }, [isVisible, isMobile, onClose, isAttachModalOpen, isReviewModalOpen, otherPanelRef]);
+    }, [isVisible, isMobile, onClose, isAttachModalOpen, isReviewModalOpen, otherPanelRef, panelRef]);
 
     if (!shouldRender || !renderTrade) return null;
 
@@ -1305,7 +1306,7 @@ export default function TradeDetailsPanelLeft({
                                         setIsClosing(false);
                                         onClose();
                                     } catch (err) {
-                                        setCloseError(String(err).replace(/^Error:\s*/, ""));
+                                        setCloseError(getUserMessage(err));
                                     } finally {
                                         setIsSubmitting(false);
                                     }

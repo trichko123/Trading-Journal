@@ -13,7 +13,7 @@ import java.util.stream.Collectors;
 @Configuration
 public class CorsConfig {
 
-    @Value("${app.cors.allowed-origins:http://localhost:5173}")
+    @Value("${app.cors.allowed-origins:http://localhost:5173,http://localhost:4173}")
     private String allowedOrigins;
 
     @Bean
@@ -26,7 +26,13 @@ public class CorsConfig {
                 .collect(Collectors.toList());
         config.setAllowedOrigins(origins);
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        config.setAllowedHeaders(List.of("*"));
+        config.setAllowedHeaders(List.of(
+                "Authorization",
+                "Content-Type",
+                "Accept",
+                "Origin",
+                "X-Requested-With"
+        ));
         config.setAllowCredentials(false); // JWT in headers => false is fine
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();

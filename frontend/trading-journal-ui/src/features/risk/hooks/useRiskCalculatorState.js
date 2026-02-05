@@ -22,9 +22,9 @@ export default function useRiskCalculatorState({
 
     useEffect(() => {
         const stored = localStorage.getItem(contractSizeStorageKey);
-        if (stored) {
-            setRiskCalcContractSize(stored);
-        }
+        if (!stored) return undefined;
+        const timeoutId = setTimeout(() => setRiskCalcContractSize(stored), 0);
+        return () => clearTimeout(timeoutId);
     }, [contractSizeStorageKey]);
 
     useEffect(() => {
